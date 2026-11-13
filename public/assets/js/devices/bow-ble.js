@@ -195,8 +195,9 @@ export class BowLink extends EventTarget {
     this._simT = setInterval(() => {
       t += 1 / 60;
       // goyangan bidik halus di sekitar tengah (busur sudah dikalibrasi)
-      const yaw = Math.sin(t * 0.7) * 1.3 + Math.sin(t * 2.3) * 0.4;
-      const pitch = Math.cos(t * 0.5) * 1.0 + Math.sin(t * 1.9) * 0.3;
+      const k = (this.simSpan || 3.2) / 3.2;   // goyangan mengikuti jarak target (simSpan = aimSpan dari simulator)
+      const yaw = (Math.sin(t * 0.7) * 1.3 + Math.sin(t * 2.3) * 0.4) * k;
+      const pitch = (Math.cos(t * 0.5) * 1.0 + Math.sin(t * 1.9) * 0.3) * k;
       const hy = yaw * Math.PI / 360, hp = pitch * Math.PI / 360;
       const q = qmul([Math.cos(hy), 0, Math.sin(hy), 0], [Math.cos(hp), Math.sin(hp), 0, 0]);
       if (t >= nextShot) { shotSeq = (shotSeq + 1) % 256; nextShot = t + 3 + Math.random(); }

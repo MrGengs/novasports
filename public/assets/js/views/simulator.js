@@ -14,7 +14,7 @@ import { MuseLink, PRESETS as MUSE_PRESETS, CHANNELS as EEG_CH } from "../device
 import { db, firebaseReady, auth } from "../firebase-config.js";
 import { getCurrentUser } from "../auth.js";
 
-const TARGET_PX = 300;
+let TARGET_PX = 132;   // minimap skor di pojok game 3D (300 bila WebGL tidak tersedia)
 
 export function simulatorView() {
   const c = DEMO.simulator.config;
@@ -27,6 +27,9 @@ export function simulatorView() {
     #simStage .side .card { padding:14px; }
     #simStage .side .card-head { margin-bottom:10px; }
     #simStage:fullscreen { background:var(--ink-50); padding:18px; overflow:auto; }
+    #targetWrap { height:clamp(380px,58vh,640px); }
+    #simStage:fullscreen #targetWrap { height:74vh; }
+    #targetBox.mini { position:absolute; right:12px; bottom:12px; background:rgba(12,20,48,.55); border-radius:14px; padding:6px; box-sizing:content-box; backdrop-filter:blur(4px); }
     #devBar { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:14px; margin-bottom:16px; }
     #devBar .card { padding:14px; }
     @media (max-width:1240px) { #simStage { grid-template-columns:1fr 1fr; } #simStage .stage-center { grid-column:1 / -1; order:-1; } #devBar { grid-template-columns:1fr; } }
@@ -95,13 +98,15 @@ export function simulatorView() {
       <div class="tabs" style="width:100%;display:grid;grid-template-columns:repeat(4,1fr);margin-bottom:10px" id="distTabs">
         ${[10, 18, 30, 70].map((d) => `<button class="${d === c.distance ? "active" : ""}" data-dist="${d}">${d} m</button>`).join("")}
       </div>
-      <div style="position:relative;background:radial-gradient(circle at 50% 40%, #1a2752, #0c1430);border-radius:var(--r-lg);padding:18px;min-height:${TARGET_PX + 60}px;display:grid;place-items:center;touch-action:none;user-select:none" id="targetWrap">
-        <div id="targetBox" style="width:${TARGET_PX}px;height:${TARGET_PX}px;position:relative">${archeryTarget([], TARGET_PX)}</div>
-        <div id="reticle" style="position:absolute;width:30px;height:30px;margin:-15px 0 0 -15px;border:2px solid #7ff0d2;border-radius:50%;box-shadow:0 0 12px #7ff0d2;pointer-events:none;display:none;left:50%;top:50%">
+      <div style="position:relative;background:radial-gradient(circle at 50% 40%, #1a2752, #0c1430);border-radius:var(--r-lg);overflow:hidden;display:grid;place-items:center;touch-action:none;user-select:none" id="targetWrap">
+        <div id="targetBox" class="mini" style="width:${TARGET_PX}px;height:${TARGET_PX}px">${archeryTarget([], TARGET_PX)}</div>
+        <div id="hitPop" style="position:absolute;left:50%;top:22%;transform:translate(-50%,0);font:900 3.2rem/1 var(--font, sans-serif);color:#fff;text-shadow:0 4px 18px rgba(0,0,0,.55);opacity:0;pointer-events:none"></div>
+        <div id="gameLoad" style="color:#cfe0ff;font-size:.8rem">Memuat arena 3D…</div>
+        <div id="reticle" style="position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #7ff0d2;border-radius:50%;box-shadow:0 0 12px #7ff0d2;pointer-events:none;display:none;left:50%;top:50%">
           <div style="position:absolute;left:50%;top:-6px;bottom:-6px;width:2px;margin-left:-1px;background:#7ff0d2"></div>
           <div style="position:absolute;top:50%;left:-6px;right:-6px;height:2px;margin-top:-1px;background:#7ff0d2"></div>
         </div>
-        <div style="position:absolute;top:10px;left:12px;right:12px;display:flex;justify-content:space-between;color:#cfe0ff;font:600 .68rem monospace;pointer-events:none">
+        <div style="position:absolute;top:0;left:0;right:0;padding:8px 12px;display:flex;justify-content:space-between;color:#e8f0ff;font:600 .68rem monospace;pointer-events:none;background:linear-gradient(rgba(12,20,48,.55),transparent)">
           <span><span id="mHz">0</span> Hz · <span id="mSpeed">—</span> m/s · hilang <span id="mDrop">0</span></span><span id="mAim">yaw 0.0° · pitch 0.0°</span>
         </div>
         <div id="phoneHint" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#cfe0ff;font-size:.72rem;display:none">Tekan-tahan area ini untuk menarik, lepas untuk menembak</div>
@@ -200,6 +205,7 @@ export function mountSimulator() {
     if (bio.source || bio.v.fwHr) { SNAP_KEYS.forEach((k) => (hit[k] = bio.v[k] ?? null)); hit.steady = bio.steadyBefore(2000); }
     if (eeg.last) { hit.focus = eeg.last.metrics.fokus; hit.calm = eeg.last.metrics.tenang; hit.drowsy = eeg.last.metrics.kantuk; hit.alpha = +eeg.last.rel.alpha.toFixed(3); }
     state.hits.push(hit);
+    if (game) game.shoot(hit, hit.speed); else popHit(hit);
     state.shots++; state.score += hit.score;
     if (hit.score === 10) state.tens++;
     state.end = Math.ceil(state.shots / 3);
@@ -300,6 +306,7 @@ export function mountSimulator() {
     $("mDraw").textContent = Math.round(p.draw * 100) + "%"; $("drawBar").style.width = Math.round(p.draw * 100) + "%";
     $("mAim").textContent = `yaw ${p.aim.yaw.toFixed(1)}° · pitch ${p.aim.pitch.toFixed(1)}° · roll ${p.aim.roll.toFixed(1)}°`;
     placeReticle(p.aim);
+    if (game) { game.setAim(p.aim); game.setDraw(p.draw); }
   });
   bow.addEventListener("shot", shotFromSensor);
   bow.addEventListener("status", (e) => {
@@ -308,7 +315,7 @@ export function mountSimulator() {
     $("bowState").className = "pill " + cls; $("bowState").textContent = "● " + (s === "live" ? "Live" : s === "idle" ? "Belum terhubung" : text.split("—")[0]);
     $("bowNote").textContent = text;
     $("phoneHint").style.display = bow.source === "phone" && s === "live" ? "block" : "none";
-    if (s === "idle") $("reticle").style.display = "none";
+    if (s === "idle") { $("reticle").style.display = "none"; game?.setAim(null); game?.setDraw(0); }
     log(text, s === "error" ? "error" : s === "retry" ? "warn" : "info");
   });
   bow.addEventListener("log", (e) => log(e.detail.text, e.detail.level));
@@ -396,6 +403,28 @@ export function mountSimulator() {
 
   // Mode HP: tahan = tarik, lepas = tembak
   const tw = $("targetWrap");
+
+  // ---------------------------------------------------------------- game 3D (dimuat terpisah; jatuh ke target 2D bila WebGL tidak ada)
+  let game = null, disposed = false;
+  import("../game/archery3d.js").then(({ ArcheryGame }) => {
+    if (disposed) return;
+    game = new ArcheryGame(tw);
+    game.setDistance(state.dist, aimSpan());
+    game.onImpact = popHit;
+    $("gameLoad").remove();
+  }).catch((err) => {
+    log("Arena 3D tidak bisa dimuat (" + (err.message || err) + ") — memakai target 2D.", "warn");
+    TARGET_PX = 300; const box = $("targetBox"); box.classList.remove("mini"); box.style.width = box.style.height = TARGET_PX + "px";
+    $("gameLoad")?.remove(); render();
+  });
+  function popHit(hit) {
+    const el = $("hitPop"); if (!el) return;
+    const d = Math.hypot(hit.x, hit.y);
+    el.textContent = hit.score ? (d < 0.05 ? "X" : String(hit.score)) : "M";
+    el.style.color = hit.score >= 9 ? "#ffd23f" : hit.score >= 7 ? "#ff5a5a" : hit.score >= 5 ? "#5fb4ff" : "#ffffff";
+    el.animate([{ opacity: 0, transform: "translate(-50%,10px) scale(.6)" }, { opacity: 1, transform: "translate(-50%,0) scale(1.15)", offset: 0.18 },
+      { opacity: 1, transform: "translate(-50%,-6px) scale(1)", offset: 0.6 }, { opacity: 0, transform: "translate(-50%,-30px) scale(1)" }], { duration: 1200, easing: "ease-out" });
+  }
   tw.addEventListener("pointerdown", () => bow.phonePress());
   ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => tw.addEventListener(ev, () => bow.phoneRelease()));
 
@@ -420,6 +449,7 @@ export function mountSimulator() {
     stopAuto(); clearInterval(state.timer);
     Object.assign(state, { shots: 0, end: 0, score: 0, tens: 0, hits: [], t0: null, timer: null });
     $("simState").className = "pill warn"; $("simState").innerHTML = "⏸ Siap";
+    game?.clear();
     render();
   }
   $("btnShoot").addEventListener("click", shootDemo);
@@ -429,6 +459,7 @@ export function mountSimulator() {
     const b = e.target.closest("[data-dist]"); if (!b) return;
     state.dist = +b.dataset.dist; $("distNow").textContent = state.dist;
     $("distTabs").querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b));
+    game?.setDistance(state.dist, aimSpan()); bow.simSpan = aimSpan();
   });
   $("arrowCount").addEventListener("change", (e) => { state.maxArrows = +e.target.value; $("shotMax").textContent = state.maxArrows; render(); });
 
@@ -480,5 +511,5 @@ export function mountSimulator() {
 
   if (!BowLink.bluetoothAvailable) log("Web Bluetooth tidak tersedia di browser ini — gunakan Mode HP atau Simulasi, atau buka di Chrome/Edge.", "warn");
   render();
-  return () => { clearInterval(state.timer); stopAuto(); bow.stop(); bio.stop(); eeg.stop(); };
+  return () => { disposed = true; game?.dispose(); clearInterval(state.timer); stopAuto(); bow.stop(); bio.stop(); eeg.stop(); };
 }
