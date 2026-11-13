@@ -93,11 +93,22 @@ static void displayInit() {
 // ---------------------------------------------------------------- assets
 static bool assetsInit() {
   const esp_partition_t* p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, (esp_partition_subtype_t)0x40, "assets");
-  if (!p) return false;
+  if (!p) { Serial.println("# assets: partition 'assets' not found"); return false; }
+  uint32_t hdr[4];
+  if (esp_partition_read(p, 0, hdr, sizeof hdr) != ESP_OK || hdr[0] != 0x3141424E /* "NBA1" */) {
+    Serial.printf("# assets: bad header %08X (flash build/assets.bin at 0x310000)\n", (unsigned)hdr[0]);
+    return false;
+  }
+  // The C6 cannot map the whole 12 MB partition: map only what the image really uses (rounded up to 64 KB).
+  uint32_t len = (hdr[2] + 0xFFFF) & ~0xFFFFu;
+  if (len > p->size) len = p->size;
   const void* ptr = nullptr;
   esp_partition_mmap_handle_t h;
-  if (esp_partition_mmap(p, 0, p->size, ESP_PARTITION_MMAP_DATA, &ptr, &h) != ESP_OK) return false;
-  return assets.load((const uint8_t*)ptr);     // everything is read straight from flash through the cache (no PSRAM here)
+  esp_err_t e = esp_partition_mmap(p, 0, len, ESP_PARTITION_MMAP_DATA, &ptr, &h);
+  if (e != ESP_OK) { Serial.printf("# assets: mmap of %u bytes failed (%d)\n", (unsigned)len, (int)e); return false; }
+  if (!assets.load((const uint8_t*)ptr)) { Serial.printf("# assets: image has %u entries, firmware expects %d\n", (unsigned)((const uint32_t*)ptr)[1], (int)A::COUNT); return false; }
+  Serial.printf("# assets: %u KB mapped, %d entries\n", (unsigned)(len / 1024), (int)A::COUNT);
+  return true;     // everything is read straight from flash through the cache (no PSRAM here)
 }
 
 // ---------------------------------------------------------------- touch (CST816T, shared I2C bus)
