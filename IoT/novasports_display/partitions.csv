@@ -1,4 +1,4 @@
-# Nova-Band on T-Display-S3 (16 MB flash)
+# NovaSports on Waveshare ESP32-C6-Touch-LCD-1.69 (16 MB flash)
 # Name,   Type, SubType,  Offset,   Size
 nvs,      data, nvs,      0x9000,   0x5000
 phy_init, data, phy,      0xe000,   0x1000

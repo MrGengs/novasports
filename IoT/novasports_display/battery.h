@@ -1,4 +1,4 @@
-// Nova-Band — baterai Li-Po 1 sel di T-Display-S3 (pembagi 1:2 ke GPIO 4).
+// NovaSports — baterai Li-Po 1 sel di Waveshare ESP32-C6-Touch-LCD-1.69 (pembagi 1:3 ke BAT_ADC = GPIO 0).
 //
 // Diporting dari modul baterai project Asawatch (touchscreen/battery.cpp), versi ringkas:
 //   * MEDIAN 9 sampel tiap panggilan (burst transmit WiFi membuat tegangan ambles sesaat; median
@@ -20,8 +20,8 @@
 
 namespace battery {
 
-static const int PIN = 4;
-static const float DIVIDER = 2.0f;                 // Vbaterai / Vpin (dikalibrasi, lihat atas)
+static const int PIN = 0;
+static const float DIVIDER = 3.0f;                 // Vbaterai / Vpin (dikalibrasi, lihat atas)
 static const int PLUG_MV = 4300, UNPLUG_MV = 4250; // histeresis: di atas ini = USB (pin membaca rel USB)
 static const float CHARGE_PCT_PER_MIN = 0.8f;      // perkiraan laju isi saat dicas (pagar, bukan pengukuran)
 

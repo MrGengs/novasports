@@ -1,12 +1,12 @@
-// Nova-Band — real sensors on their own I2C bus (Wire1), read by a FreeRTOS task.
+// NovaSports (ESP32-C6) — real sensors on the board's shared I2C bus (Wire, mutex in i2c_lock.h), read by a FreeRTOS task.
 //
 //   MAX30102  PPG   0x57  -> heart rate (beat detection on IR) + SpO2 (ratio of ratios)
 //   MLX90614  IR    0x5A  -> skin temperature (object temperature)
-//   MPU6050   IMU   0x68/69 -> steps + cadence: peak detection on the accelerometer magnitude
-//   GY-50     gyro  0x69  -> fallback when there is no MPU6050: |w| peaks once per step for an upper-arm swing
+//   QMI8658   IMU   0x6B (onboard) -> steps + cadence: peak detection on the accelerometer magnitude
+//   (GY-50 gyro code stays as an optional fallback, not fitted on this board)
 //
-// Wire (touch, GPIO 17/18) is left alone. Wire1 runs at 100 kHz because the
-// MLX90614 is only specified to 100 kHz. Every sensor is optional: a missing
+// The ESP32-C6 has one I2C controller, so touch and sensors share the bus (GPIO8 SDA / GPIO7 SCL) at 100 kHz,
+// because the MLX90614 is only specified to 100 kHz. Every sensor is optional: a missing
 // one is skipped and the model keeps simulating that value.
 //
 // The task only writes `sensors::data`; loop() copies fresh values into the
@@ -17,11 +17,11 @@
 #include <Wire.h>
 #include <heartRate.h>
 
+#include "i2c_lock.h"
 #include "pedo_gyro.h"
 
 namespace sensors {
 
-static const int PIN_SDA = 10, PIN_SCL = 11;
 static const uint8_t ADDR_MLX = 0x5A;
 static const uint32_t VALID_MS = 4000;             // a reading older than this is dropped
 
@@ -110,44 +110,45 @@ Ppg ppgState;
 
 // ---- MLX90614
 bool mlxRead(float& c) {
-  Wire1.beginTransmission(ADDR_MLX);
-  Wire1.write(0x07);                               // RAM: Tobj1
-  if (Wire1.endTransmission(false) != 0) return false;
-  if (Wire1.requestFrom((int)ADDR_MLX, 3) != 3) return false;
-  uint8_t lo = Wire1.read(), hi = Wire1.read();
-  Wire1.read();                                    // PEC, not checked
+  Wire.beginTransmission(ADDR_MLX);
+  Wire.write(0x07);                               // RAM: Tobj1
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((int)ADDR_MLX, 3) != 3) return false;
+  uint8_t lo = Wire.read(), hi = Wire.read();
+  Wire.read();                                    // PEC, not checked
   if (hi & 0x80) return false;                     // error flag
   c = ((hi << 8) | lo) * 0.02f - 273.15f;
   return c > -20 && c < 100;
 }
 
-// ---- MPU6050 pedometer
+// ---- QMI8658 pedometer
 // Same idea as the usual open-source ESP32/Arduino pedometers (magnitude of the accelerometer,
 // gravity removed, peak = step, refractory time), plus an adaptive threshold (half of the recent
 // peak height) and a "4 steps in a row" gate so a single arm movement is not counted as walking.
 bool mpuWrite(uint8_t reg, uint8_t v) {
-  Wire1.beginTransmission(mpuAddr); Wire1.write(reg); Wire1.write(v);
-  return Wire1.endTransmission() == 0;
+  Wire.beginTransmission(mpuAddr); Wire.write(reg); Wire.write(v);
+  return Wire.endTransmission() == 0;
 }
+// On this board the IMU is the onboard QMI8658 (0x6B, alt 0x6A) - no external MPU6050 / GY-50 is fitted.
+// The names mpu* are kept so the rest of the file (and the model) is identical to the Nova-Band build.
 bool mpuInit() {
-  for (uint8_t a : {(uint8_t)0x68, (uint8_t)0x69}) {
+  for (uint8_t a : {(uint8_t)0x6B, (uint8_t)0x6A}) {
     mpuAddr = a;
-    Wire1.beginTransmission(a); Wire1.write(0x75);
-    if (Wire1.endTransmission(false) != 0 || Wire1.requestFrom((int)a, 1) != 1) continue;
-    uint8_t id = Wire1.read();
-    if (id != 0x68 && id != 0x70 && id != 0x72 && id != 0x98) continue;   // MPU6050/6500/9250 and clones
-    return mpuWrite(0x6B, 0x01)                    // wake, PLL clock
-        && mpuWrite(0x1A, 0x03)                    // DLPF 44 Hz
-        && mpuWrite(0x1C, 0x10);                   // +-8 g, 4096 LSB/g
+    Wire.beginTransmission(a); Wire.write(0x00);                       // WHO_AM_I
+    if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)a, 1) != 1) continue;
+    if (Wire.read() != 0x05) continue;                                  // QMI8658
+    return mpuWrite(0x02, 0x60)                                         // CTRL1: auto-increment, big-endian off
+        && mpuWrite(0x03, 0x26)                                         // CTRL2: accel +-8 g (4096 LSB/g), ODR 112 Hz
+        && mpuWrite(0x08, 0x01);                                        // CTRL7: accelerometer on
   }
   mpuAddr = 0;
   return false;
 }
 bool mpuRead(float& g) {
-  Wire1.beginTransmission(mpuAddr); Wire1.write(0x3B);
-  if (Wire1.endTransmission(false) != 0 || Wire1.requestFrom((int)mpuAddr, 6) != 6) return false;
+  Wire.beginTransmission(mpuAddr); Wire.write(0x35);                    // AX_L
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)mpuAddr, 6) != 6) return false;
   int16_t v[3];
-  for (auto& x : v) { uint8_t h = Wire1.read(), l = Wire1.read(); x = (int16_t)((h << 8) | l); }
+  for (auto& x : v) { uint8_t l = Wire.read(), h = Wire.read(); x = (int16_t)((h << 8) | l); }   // little-endian
   float ax = v[0] / 4096.f, ay = v[1] / 4096.f, az = v[2] / 4096.f;
   g = sqrtf(ax * ax + ay * ay + az * az);
   return true;
@@ -186,15 +187,15 @@ Pedometer pedState;
 
 // ---- GY-50 (L3G4200D)
 bool gyroWrite(uint8_t reg, uint8_t v) {
-  Wire1.beginTransmission(gyroAddr); Wire1.write(reg); Wire1.write(v);
-  return Wire1.endTransmission() == 0;
+  Wire.beginTransmission(gyroAddr); Wire.write(reg); Wire.write(v);
+  return Wire.endTransmission() == 0;
 }
 bool gyroInit() {
   for (uint8_t a : {(uint8_t)0x69, (uint8_t)0x68}) {
     gyroAddr = a;
-    Wire1.beginTransmission(a); Wire1.write(0x0F);
-    if (Wire1.endTransmission(false) != 0 || Wire1.requestFrom((int)a, 1) != 1) continue;
-    if (Wire1.read() != 0xD3) continue;            // WHO_AM_I
+    Wire.beginTransmission(a); Wire.write(0x0F);
+    if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)a, 1) != 1) continue;
+    if (Wire.read() != 0xD3) continue;            // WHO_AM_I
     // power-cycle chip (bangunkan paksa), tunggu turn-on 250 ms, BDU mati (keluaran selalu diperbarui), 2000 dps
     gyroWrite(0x20, 0x00); delay(50);
     gyroWrite(0x24, 0x80); delay(20);              // CTRL_REG5: BOOT (muat ulang memori internal)
@@ -213,10 +214,10 @@ bool gyroInit() {
 float gBias[3] = {0, 0, 0};
 int gQuiet = 0;
 bool gyroRaw(float* g) {
-  Wire1.beginTransmission(gyroAddr); Wire1.write(0x28 | 0x80);   // auto-increment
-  if (Wire1.endTransmission(false) != 0 || Wire1.requestFrom((int)gyroAddr, 6) != 6) return false;
+  Wire.beginTransmission(gyroAddr); Wire.write(0x28 | 0x80);   // auto-increment
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)gyroAddr, 6) != 6) return false;
   int16_t v[3];
-  for (auto& x : v) { uint8_t l = Wire1.read(), h = Wire1.read(); x = (int16_t)((h << 8) | l); }
+  for (auto& x : v) { uint8_t l = Wire.read(), h = Wire.read(); x = (int16_t)((h << 8) | l); }
   for (int i = 0; i < 3; i++) g[i] = v[i] * .07f;                // 70 mdps/LSB at 2000 dps
   return true;
 }
@@ -286,19 +287,19 @@ struct Cadence {
 };
 Cadence cadState;
 
-// Debug: register kunci GY-50 + data mentah; dipanggil dari task sensor (satu-satunya pemakai Wire1).
+// Debug: register kunci GY-50 + data mentah; dipanggil dari task sensor (satu-satunya pemakai Wire).
 void gyroDebug(uint32_t now) {
   static uint32_t at = 0;
   if (now - at < 1000) return;
   at = now;
   uint8_t r[8] = {0}; const uint8_t regs[8] = {0x0F, 0x20, 0x21, 0x22, 0x23, 0x24, 0x26, 0x27};
   for (int i = 0; i < 8; i++) {
-    Wire1.beginTransmission(gyroAddr); Wire1.write(regs[i]);
-    if (Wire1.endTransmission(false) == 0 && Wire1.requestFrom((int)gyroAddr, 1) == 1) r[i] = Wire1.read();
+    Wire.beginTransmission(gyroAddr); Wire.write(regs[i]);
+    if (Wire.endTransmission(false) == 0 && Wire.requestFrom((int)gyroAddr, 1) == 1) r[i] = Wire.read();
   }
   uint8_t o[6] = {0};
-  Wire1.beginTransmission(gyroAddr); Wire1.write(0x28 | 0x80);
-  if (Wire1.endTransmission(false) == 0 && Wire1.requestFrom((int)gyroAddr, 6) == 6) for (auto& b : o) b = Wire1.read();
+  Wire.beginTransmission(gyroAddr); Wire.write(0x28 | 0x80);
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom((int)gyroAddr, 6) == 6) for (auto& b : o) b = Wire.read();
   snprintf(data.gdbg, sizeof data.gdbg, "WHO=%02X C1=%02X C2=%02X C3=%02X C4=%02X C5=%02X T=%02X ST=%02X OUT=%02X%02X %02X%02X %02X%02X",
            r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], o[1], o[0], o[3], o[2], o[5], o[4]);
 }
@@ -311,6 +312,7 @@ void task(void*) {
   for (;;) {
     if (stopReq) { stopped = true; vTaskDelay(pdMS_TO_TICKS(50)); continue; }
     uint32_t now = millis();
+    i2c::take(100);                                  // touch (loop task) shares this bus
     if (data.hasMax) {
       ppg.check();
       while (ppg.available()) {
@@ -324,7 +326,7 @@ void task(void*) {
       probeAt = now;
       data.hasMpu = mpuInit();
       if (!data.hasMpu && gyroInit()) { gyroBiasInit(); data.hasGyro = true; }
-      if (data.hasMpu || data.hasGyro) Serial.printf("# sensor langkah terdeteksi: %s\n", data.hasMpu ? "MPU6050" : "GY-50");
+      if (data.hasMpu || data.hasGyro) Serial.printf("# sensor langkah terdeteksi: %s\n", data.hasMpu ? "QMI8658" : "GY-50");
     }
     if (data.simUntil && (int32_t)(data.simUntil - now) > 0) {   // uji jalur lengkap tanpa sensor fisik
       static float ph = 0; ph += 2 * M_PI * 0.92f * .01f;       // ~110 langkah/menit, ayun lengan atas
@@ -349,6 +351,7 @@ void task(void*) {
       float c;
       if (mlxRead(c)) { data.temp = data.tempAt ? data.temp * .6f + c * .4f : c; data.tempAt = now; }
     }
+    i2c::give();
     vTaskDelayUntil(&wake, pdMS_TO_TICKS(10));
   }
 }
@@ -356,31 +359,30 @@ void task(void*) {
 }  // namespace
 
 inline void begin() {
-  Wire1.begin(PIN_SDA, PIN_SCL, 100000);
-  Wire1.setTimeOut(20);
+  // the bus is already up (touchInit: 100 kHz, 5 ms timeout)
 
-  Serial.print("# i2c scan Wire1:");                // every address that ACKs, to debug wiring
+  Serial.print("# i2c scan:");                // every address that ACKs, to debug wiring
   for (uint8_t a = 1; a < 127; a++) {
-    Wire1.beginTransmission(a);
-    if (Wire1.endTransmission() == 0) Serial.printf(" 0x%02X", a);
+    Wire.beginTransmission(a);
+    if (Wire.endTransmission() == 0) Serial.printf(" 0x%02X", a);
   }
   Serial.println();
 
-  data.hasMax = ppg.begin(Wire1, I2C_SPEED_STANDARD);
+  data.hasMax = ppg.begin(Wire, I2C_SPEED_STANDARD);
   if (data.hasMax)
     ppg.setup(0x3C, 4, 2, 400, 411, 4096);         // LED 12 mA, avg 4, red+IR, 400 sps -> 100 Hz, 18-bit
 
-  Wire1.beginTransmission(ADDR_MLX);
-  data.hasMlx = Wire1.endTransmission() == 0;
+  Wire.beginTransmission(ADDR_MLX);
+  data.hasMlx = Wire.endTransmission() == 0;
 
   data.hasMpu = mpuInit();
   data.hasGyro = !data.hasMpu && gyroInit();
   if (data.hasGyro) gyroBiasInit();       // the MPU6050 already gives steps, and shares 0x68/0x69
 
-  Serial.printf("# sensors: MAX30102 %s, MLX90614 %s, MPU6050 %s, GY-50 %s\n", data.hasMax ? "ok" : "--",
+  Serial.printf("# sensors: MAX30102 %s, MLX90614 %s, QMI8658 %s, GY-50 %s\n", data.hasMax ? "ok" : "--",
                 data.hasMlx ? "ok" : "--", data.hasMpu ? "ok" : "--", data.hasGyro ? "ok" : "--");
   if (data.hasMax || data.hasMlx || data.hasMpu || data.hasGyro)
-    xTaskCreatePinnedToCore(task, "sensors", 4096, nullptr, 1, nullptr, 1);
+    xTaskCreate(task, "sensors", 4096, nullptr, 2, nullptr);   // above the render loop (prio 1): the MAX30102 FIFO holds only ~320 ms
 }
 
 // Power down every sensor (MAX30102 LEDs off, gyro power-down) before deep sleep.
@@ -388,9 +390,11 @@ inline void shutdown() {
   if (!(data.hasMax || data.hasMlx || data.hasMpu || data.hasGyro)) return;
   stopReq = true;
   for (int i = 0; i < 50 && !stopped; i++) delay(2);   // let the task finish its I2C transaction
+  i2c::take(100);
   if (data.hasMax) ppg.shutDown();
-  if (data.hasMpu) mpuWrite(0x6B, 0x40);               // sleep
+  if (data.hasMpu) mpuWrite(0x08, 0x00);               // CTRL7: sensors off
   if (data.hasGyro) gyroWrite(0x20, 0x00);             // CTRL_REG1: power-down
+  i2c::give();
 }
 
 }  // namespace sensors

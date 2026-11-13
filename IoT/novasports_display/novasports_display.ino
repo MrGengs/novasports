@@ -1,31 +1,35 @@
 // ============================================================
-// Nova-Band — firmware for the LILYGO T-Display-S3 Touch (ESP32-S3R8)
+// NovaSports — firmware for the Waveshare ESP32-C6-Touch-LCD-1.69 (ESP32-C6, 16 MB flash, no PSRAM)
 //
-//   display  ST7789 170x320 on the 8-bit i80 bus, esp_lcd + DMA, two frame
-//            buffers (draw one while the other is on the wire), ~60 fps
-//   assets   Blender renders + fonts in the "assets" flash partition,
-//            memory-mapped (tools/fw_assets.py -> build/fw/assets.bin)
-//   input    CST816 touch (swipe between pages, tap), BOOT + KEY buttons
-//   link     Bluetooth LE: standard Heart Rate (0x180D) + Battery (0x180F)
-//            services, so any HR app can read it, plus the Nova-Band service
-//            (JSON telemetry, PPG wave, commands) for the web app;
-//            the same JSON lines over USB serial for Web Serial.
+// Same product firmware as firmware/novaband_display (Nova-Band on the LILYGO T-Display-S3):
+// same pages (LIVE / RUN / READINESS / LINK), model, sensors, JSON protocol, BLE services and
+// Firebase cloud link. Only the board layer differs:
 //
-// Build + flash: firmware/flash.ps1 (arduino-cli + esptool). Board options:
-//   esp32:esp32:esp32s3:CDCOnBoot=cdc,FlashSize=16M,PSRAM=opi,PartitionScheme=custom
+//   display  ST7789V2 240x280 on SPI (Arduino_GFX), portrait. The frame is drawn as four 70-row bands
+//            in one 33.6 KB buffer (no PSRAM for a full frame) and each band goes out over SPI at once.
+//   assets   Blender renders + fonts in the "assets" flash partition, memory-mapped
+//            (tools/pack_assets_c6.py -> build/assets.bin, flashed at 0x310000)
+//   input    CST816T touch (swipe between pages, tap), BOOT (GPIO9) + PWR (GPIO18) buttons
+//   sensors  MAX30102 + MLX90614 added, steps from the onboard QMI8658, on the shared I2C bus (GPIO8 SDA / GPIO7 SCL,
+//            100 kHz because of the MLX90614), serialised with the touch controller by a mutex
+//   link     Bluetooth LE: Heart Rate (0x180D) + Battery (0x180F) + the Nova-Band service (JSON),
+//            the same JSON lines over USB serial, WiFi -> Realtime Database (cloud.h)
+//
+// Build + flash: see README.md in this folder. Arduino board options:
+//   esp32:esp32:esp32c6:CDCOnBoot=cdc,FlashSize=16M,PartitionScheme=custom
 // ============================================================
 #include <Arduino.h>
-#include <NimBLEDevice.h>   // NimBLE, bukan Bluedroid: ~80 KB RAM internal lebih hemat, supaya WiFi + TLS muat
+#include <Arduino_GFX_Library.h>
+#include <BLEDevice.h>      // BLE bawaan core ESP32 (berbasis NimBLE di C6) - NimBLE-Arduino 2.x tidak cocok dengan core C6
+#include <BLEServer.h>
+#include <BLEUtils.h>
 #include <Wire.h>
-#include <esp_lcd_io_i80.h>
-#include <esp_lcd_panel_io.h>
-#include <esp_lcd_panel_ops.h>
-#include <esp_lcd_panel_st7789.h>
 #include <esp_mac.h>
 #include <esp_partition.h>
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 
+#include "i2c_lock.h"
 #include "battery.h"
 #include "cloud.h"
 #include "runlog.h"
@@ -36,21 +40,16 @@
 #include "src/protocol.h"
 #include "src/ui.h"
 
-// ---------------------------------------------------------------- pins (T-Display-S3)
-static const int PIN_PWR = 15, PIN_BL = 38, PIN_RD = 9, PIN_WR = 8, PIN_DC = 7, PIN_CS = 6, PIN_RST = 5;
-static const int PIN_D[8] = {39, 40, 41, 42, 45, 46, 47, 48};
-static const int PIN_SDA = 18, PIN_SCL = 17, PIN_TINT = 16, PIN_TRST = 21;
-static const int PIN_BTN_PREV = 0, PIN_BTN_NEXT = 14, PIN_BAT = 4;
-static const int PIN_LINK = 12;      // ke GPIO 3 ESP32-C3: HIGH = jam hidup, LOW = jam mati (C3 tidur)
-static const uint32_t PCLK_HZ = 20 * 1000 * 1000;
-
-// Touch panel -> landscape screen, as in LILYGO's own example (swap XY,
-// mirror X). The CST816 reports in the panel's native
-// portrait frame; flip these if a swipe goes the wrong way (raw values are
-// logged on the serial port as "# touch").
-#define TOUCH_SWAP 1
-#define TOUCH_FLIP_X 1
-#define TOUCH_FLIP_Y 0
+// ---------------------------------------------------------------- pins (Waveshare ESP32-C6-Touch-LCD-1.69)
+static const int PIN_PWR = 15;                          // BAT_EN: hold HIGH to keep the board powered on battery
+static const int PIN_LCD_SCLK = 1, PIN_LCD_MOSI = 2, PIN_LCD_DC = 3, PIN_LCD_RST = 4, PIN_LCD_CS = 5, PIN_BL = 6;
+static const int PIN_SDA = 8, PIN_SCL = 7;              // shared I2C bus: touch, IMU, RTC, MAX30102, MLX90614, GY-50
+static const int PIN_BTN_NEXT = 9;                      // BOOT key (strapping pin: only pressed while running)
+static const int PIN_BTN_PREV = 18;                     // PWR key (polarity measured at boot, see pwrKeyBegin)
+static const int PIN_LINK = 17;                         // pad ESP_RXD -> GPIO 3 of the ESP32-C3: HIGH = watch on, LOW = off
+static const int LCD_COL_OFFSET = 0, LCD_ROW_OFFSET = 20;   // ST7789V2 240x280 window
+static const uint32_t LCD_SPI_HZ = 80000000;
+static const uint8_t TOUCH_ADDR = 0x15;
 
 // ---------------------------------------------------------------- BLE UUIDs
 #define NB_SVC   "4e420001-6e6f-7661-6261-6e6453330000"
@@ -59,17 +58,14 @@ static const uint32_t PCLK_HZ = 20 * 1000 * 1000;
 #define NB_CMD   "4e420004-6e6f-7661-6261-6e6453330000"
 
 // ---------------------------------------------------------------- state
-static esp_lcd_panel_handle_t panel;
-static esp_lcd_panel_io_handle_t io;
-// The frame is drawn as two 85-row bands, one per CPU core, each in its own
-// internal-RAM DMA buffer (same memory as one full frame). Core 0 draws the
-// top band while core 1 (loop) draws the bottom one; then both go out on the
-// i80 bus. A band is reused as soon as its own transfer is done.
-static const int BAND = gfx::H / 2;
-static uint16_t* band[2] = {nullptr, nullptr};
-static SemaphoreHandle_t bandFree[2], goTop, doneTop;
-static volatile int dmaNext = 0;                   // which band the next "done" belongs to
-static gfx::Canvas canvasTop, canvasBot;
+static Arduino_DataBus* lcdBus = new Arduino_HWSPI(PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, GFX_NOT_DEFINED);
+static Arduino_GFX* panel = new Arduino_ST7789(lcdBus, PIN_LCD_RST, 0, true, gfx::W, gfx::H, LCD_COL_OFFSET, LCD_ROW_OFFSET, LCD_COL_OFFSET, LCD_ROW_OFFSET);
+// The frame is drawn as four 70-row bands through one buffer (33.6 KB instead of a 134 KB frame):
+// the UI is rendered once per band, clipped to it, and the band is sent over SPI before the next.
+static const int BAND = 70, BAND_N = gfx::H / BAND;
+static_assert(BAND * BAND_N == gfx::H, "bands must tile the panel");
+alignas(4) static uint16_t bandBuf[gfx::W * BAND];
+static gfx::Canvas canvas;
 static Assets assets;
 static Model model;
 static Ui ui;
@@ -78,7 +74,7 @@ static int brightness = 220;
 
 struct Line { char s[256]; uint8_t src; };      // commands from BLE/USB, handled in loop()
 static QueueHandle_t cmdQ;
-static NimBLECharacteristic *chTelem, *chWave, *chHr, *chBat;
+static BLECharacteristic *chTelem, *chWave, *chHr, *chBat;
 static volatile int bleClients = 0;
 static bool bleUp = false;                                  // bleInit() sudah jalan
 static volatile uint32_t advAt = 0;                        // millis() at which to restart advertising, 0 = none
@@ -89,70 +85,9 @@ static float uptime() { return millis() / 1000.f; }
 static void setBrightness(int v) { brightness = constrain(v, 10, 255); }
 
 // ---------------------------------------------------------------- display
-static bool IRAM_ATTR onDone(esp_lcd_panel_io_handle_t, esp_lcd_panel_io_event_data_t*, void*) {
-  BaseType_t woken = pdFALSE;
-  int b = dmaNext;
-  dmaNext = b ^ 1;
-  xSemaphoreGiveFromISR(bandFree[b], &woken);
-  return woken == pdTRUE;
-}
-
 static void displayInit() {
-  pinMode(PIN_RD, OUTPUT);
-  digitalWrite(PIN_RD, HIGH);
-  esp_lcd_i80_bus_handle_t bus = nullptr;
-  esp_lcd_i80_bus_config_t bc = {};
-  bc.dc_gpio_num = PIN_DC;
-  bc.wr_gpio_num = PIN_WR;
-  bc.clk_src = LCD_CLK_SRC_DEFAULT;
-  for (int i = 0; i < 8; i++) bc.data_gpio_nums[i] = PIN_D[i];
-  bc.bus_width = 8;
-  bc.max_transfer_bytes = gfx::W * gfx::H * 2;
-  bc.dma_burst_size = 64;
-  ESP_ERROR_CHECK(esp_lcd_new_i80_bus(&bc, &bus));
-
-  esp_lcd_panel_io_i80_config_t ic = {};
-  ic.cs_gpio_num = PIN_CS;
-  ic.pclk_hz = PCLK_HZ;
-  ic.trans_queue_depth = 4;
-  ic.on_color_trans_done = onDone;
-  ic.lcd_cmd_bits = 8;
-  ic.lcd_param_bits = 8;
-  ic.dc_levels.dc_data_level = 1;
-  ic.flags.swap_color_bytes = 1;               // RGB565 in memory is little-endian; the ST7789 wants MSB first
-  ESP_ERROR_CHECK(esp_lcd_new_panel_io_i80(bus, &ic, &io));
-
-  esp_lcd_panel_dev_config_t pc = {};
-  pc.reset_gpio_num = PIN_RST;
-  pc.rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB;
-  pc.bits_per_pixel = 16;
-  ESP_ERROR_CHECK(esp_lcd_new_panel_st7789(io, &pc, &panel));
-  esp_lcd_panel_reset(panel);
-  esp_lcd_panel_init(panel);
-  esp_lcd_panel_invert_color(panel, true);
-  esp_lcd_panel_swap_xy(panel, true);          // landscape, USB-C on the left
-  esp_lcd_panel_mirror(panel, false, true);
-  esp_lcd_panel_set_gap(panel, 0, 35);         // 170 visible rows of the 240-row controller
-  esp_lcd_panel_disp_on_off(panel, true);
-
-  for (int i = 0; i < 2; i++) {
-    band[i] = (uint16_t*)esp_lcd_i80_alloc_draw_buffer(io, gfx::W * BAND * 2, MALLOC_CAP_DMA | MALLOC_CAP_SPIRAM);   // PSRAM: 108 KB RAM internal tersisa untuk BLE + WiFi + TLS
-    memset(band[i], 0, gfx::W * BAND * 2);
-    bandFree[i] = xSemaphoreCreateBinary();
-    xSemaphoreGive(bandFree[i]);
-  }
-  canvasTop.band(band[0], 0, BAND);
-  canvasBot.band(band[1], BAND, gfx::H);
-}
-
-// core 0: draws the top band whenever the loop says go
-static void renderTopTask(void*) {
-  for (;;) {
-    xSemaphoreTake(goTop, portMAX_DELAY);
-    xSemaphoreTake(bandFree[0], portMAX_DELAY);
-    ui.render(canvasTop);
-    xSemaphoreGive(doneTop);
-  }
+  panel->begin(LCD_SPI_HZ);
+  panel->fillScreen(0);
 }
 
 // ---------------------------------------------------------------- assets
@@ -162,42 +97,35 @@ static bool assetsInit() {
   const void* ptr = nullptr;
   esp_partition_mmap_handle_t h;
   if (esp_partition_mmap(p, 0, p->size, ESP_PARTITION_MMAP_DATA, &ptr, &h) != ESP_OK) return false;
-  if (!assets.load((const uint8_t*)ptr)) return false;
-  // everything after the splash -> PSRAM; the half-res background -> internal RAM
-  assets.relocate(A::BG, [](size_t n) { return heap_caps_malloc(n, MALLOC_CAP_SPIRAM); });
-  gfx::Image bg = assets.image(A::BG);
-  uint16_t* fast = (uint16_t*)heap_caps_malloc(bg.w * bg.h * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-  if (fast) { memcpy(fast, bg.px, bg.w * bg.h * 2); ui.setBackground(fast); }
-  return true;
+  return assets.load((const uint8_t*)ptr);     // everything is read straight from flash through the cache (no PSRAM here)
 }
 
-// ---------------------------------------------------------------- touch (CST816)
+// ---------------------------------------------------------------- touch (CST816T, shared I2C bus)
 // returns 1 finger down (x,y set), 2 lifted, 0 no finger, -1 no usable information (ghost / bus error)
 static int touchRead(int& x, int& y) {
-  Wire.beginTransmission(0x15);
+  if (!i2c::take(8)) return -1;
+  uint8_t b[5];
+  bool ok = false;
+  Wire.beginTransmission(TOUCH_ADDR);
   Wire.write(0x02);
-  if (Wire.endTransmission(false) != 0) return -1;
-  if (Wire.requestFrom(0x15, 5) != 5) return -1;
-  uint8_t n = Wire.read(), xh = Wire.read(), xl = Wire.read(), yh = Wire.read(), yl = Wire.read();
+  if (Wire.endTransmission(false) == 0 && Wire.requestFrom((int)TOUCH_ADDR, 5) == 5) {
+    for (auto& v : b) v = Wire.read();
+    ok = true;
+  }
+  i2c::give();
+  if (!ok) return -1;
+  uint8_t n = b[0], xh = b[1], xl = b[2], yh = b[3], yl = b[4];
+  if (n == 0xFF) return -1;                                // chip asleep / garbage
   if (!(n & 0x0F)) return 0;
   if ((xh >> 6) == 1) return 2;                            // the chip's own "lift" event
   int tx = ((xh & 0x0F) << 8) | xl, ty = ((yh & 0x0F) << 8) | yl;
-  if (tx >= 4000 || ty >= 4000) return -1;                 // 4095,4095 = ghost read, not a finger
-#if TOUCH_SWAP
-  x = ty; y = tx;
-#else
-  x = tx; y = ty;
-#endif
-#if TOUCH_FLIP_X
-  x = gfx::W - 1 - x;
-#endif
-#if TOUCH_FLIP_Y
-  y = gfx::H - 1 - y;
-#endif
+  if (tx >= gfx::W + 8 || ty >= gfx::H + 8) return -1;     // 4095,4095 = ghost read, not a finger
+  x = constrain(tx, 0, gfx::W - 1);                        // panel and touch share the portrait frame
+  y = constrain(ty, 0, gfx::H - 1);
   return 1;
 }
 
-// Polled several times per frame (see the end of loop) so a swipe follows the finger at the panel's own rate.
+// Polled several times per frame (see the end of loop and between bands) so a swipe follows the finger.
 static bool tdown = false;
 static int tlx = 0, tly = 0;
 static void touchPoll() {
@@ -213,22 +141,35 @@ static void touchPoll() {
 }
 
 static void touchInit() {
-  pinMode(PIN_TRST, OUTPUT);
-  digitalWrite(PIN_TRST, LOW);
-  delay(10);
-  digitalWrite(PIN_TRST, HIGH);
-  delay(60);
-  pinMode(PIN_TINT, INPUT);
-  Wire.begin(PIN_SDA, PIN_SCL, 400000);
-  Wire.beginTransmission(0x15); Wire.write(0xFE); Wire.write(0xFF); Wire.endTransmission();   // no auto-standby: it dropped the first swipe
+  i2c::begin(PIN_SDA, PIN_SCL, 100000);                    // 100 kHz: the MLX90614 (SMBus) hangs the bus when pushed faster
+  Wire.setTimeOut(5);                                      // a sleeping CST816T otherwise costs a 50 ms timeout per read
+  delay(20);
+  Wire.beginTransmission(TOUCH_ADDR); Wire.write(0xFE); Wire.write(0x01); Wire.endTransmission();   // DisAutoSleep = 1 (NOT 0xFF)
 }
 
 // ---------------------------------------------------------------- buttons
+// BOOT is active-low. The PWR key's polarity is measured at boot (pull-up vs pull-down read): if the line floats,
+// the key is disabled instead of guessed (a floating pin read as "pressed" would switch the board off by itself).
+static bool pwrIdle = true, pwrUsable = false;
+static void pwrKeyBegin() {
+  pinMode(PIN_BTN_PREV, INPUT_PULLUP);   delay(5);
+  bool up = digitalRead(PIN_BTN_PREV);
+  pinMode(PIN_BTN_PREV, INPUT_PULLDOWN); delay(5);
+  bool dn = digitalRead(PIN_BTN_PREV);
+  pinMode(PIN_BTN_PREV, INPUT);
+  pwrUsable = (up == dn);
+  pwrIdle = up;
+  Serial.printf("# PWR_KEY GPIO%d: %s, idle %s\n", PIN_BTN_PREV, pwrUsable ? "driven externally" : "FLOATING - key disabled", pwrIdle ? "HIGH" : "LOW");
+}
+static bool isPressed(int pin) {
+  if (pin == PIN_BTN_PREV) return pwrUsable && digitalRead(pin) != pwrIdle;
+  return digitalRead(pin) == LOW;
+}
 struct Button {
   int pin; uint32_t downAt = 0; bool down = false, longFired = false;
   // 0 nothing, 1 short press, 2 long press (fires once while held)
   int poll() {
-    bool d = digitalRead(pin) == LOW;
+    bool d = isPressed(pin);
     uint32_t now = millis();
     int ev = 0;
     if (d && !down) { down = true; downAt = now; longFired = false; }
@@ -239,50 +180,30 @@ struct Button {
 };
 static Button bPrev{PIN_BTN_PREV}, bNext{PIN_BTN_NEXT};
 
-// ---------------------------------------------------------------- power (hold left BOOT button 2 s)
+// ---------------------------------------------------------------- power (hold the PWR key 2 s)
 static const uint32_t POWER_HOLD_MS = 2000;
 
-// deep sleep: screen, peripheral rail and backlight held off; the same 2 s hold wakes it again
-static void powerOff() {
-  battery::save();
-  sensors::shutdown();                                      // MAX30102 LEDs, gyro
-  ledcWrite(PIN_BL, 0);
-  ledcDetach(PIN_BL);
-  pinMode(PIN_BL, OUTPUT);
-  digitalWrite(PIN_BL, LOW);
-  digitalWrite(PIN_LINK, LOW);                              // beri tahu ESP32-C3: jam mati
-  digitalWrite(PIN_PWR, LOW);
-  gpio_hold_en((gpio_num_t)PIN_LINK);                       // tetap LOW selama deep sleep
-  gpio_hold_en((gpio_num_t)PIN_BL);
-  gpio_hold_en((gpio_num_t)PIN_PWR);
-  gpio_deep_sleep_hold_en();
-  while (digitalRead(PIN_BTN_PREV) == LOW) delay(10);      // wait for release, else it wakes at once
-  delay(50);
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_PREV, 0);
-  esp_deep_sleep_start();
-}
-
-// after a button wake-up: stay on only if the button is still held after 2 s, otherwise sleep again
-// The phone's time survives a power-off: the system clock runs through deep sleep.
+// "Off": on battery, releasing BAT_EN cuts the board's own supply. Powered from USB the board stays alive, so it
+// parks the screen dark and waits for a key press, then restarts cleanly.
 RTC_DATA_ATTR static bool rtcTimeSet = false;
 RTC_DATA_ATTR static int rtcTzMin = 0;
 
-static void wakeGate() {
-  if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT0) return;
-  pinMode(PIN_BTN_PREV, INPUT_PULLUP);
-  uint32_t t0 = millis();
-  while (millis() - t0 < POWER_HOLD_MS) {
-    if (digitalRead(PIN_BTN_PREV) != LOW) {
-      esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BTN_PREV, 0);
-      esp_deep_sleep_start();
-    }
-    delay(10);
+static void powerOff() {
+  battery::save();
+  sensors::shutdown();                                      // MAX30102 LEDs, gyro
+  for (int i = brightness; i >= 0; i -= 12) { ledcWrite(PIN_BL, i); delay(8); }
+  ledcWrite(PIN_BL, 0);
+  panel->displayOff();
+  digitalWrite(PIN_LINK, LOW);                              // beri tahu ESP32-C3: jam mati
+  digitalWrite(PIN_PWR, LOW);                               // on battery the board dies here
+  delay(400);
+  while (isPressed(PIN_BTN_PREV) || isPressed(PIN_BTN_NEXT)) delay(10);   // USB-powered: wait for release, then for a press
+  delay(200);
+  for (;;) {
+    if (isPressed(PIN_BTN_PREV) || isPressed(PIN_BTN_NEXT)) { delay(60); if (isPressed(PIN_BTN_PREV) || isPressed(PIN_BTN_NEXT)) break; }
+    delay(20);
   }
-  gpio_deep_sleep_hold_dis();
-  gpio_hold_dis((gpio_num_t)PIN_BL);
-  gpio_hold_dis((gpio_num_t)PIN_PWR);
-  gpio_hold_dis((gpio_num_t)PIN_LINK);
-  while (digitalRead(PIN_BTN_PREV) == LOW) delay(10);      // don't let the hold count as a UI press
+  ESP.restart();
 }
 
 // ---------------------------------------------------------------- battery
@@ -341,17 +262,17 @@ static void applySensors() {
 }
 
 // ---------------------------------------------------------------- BLE
-class SrvCb : public NimBLEServerCallbacks {
-  void onConnect(NimBLEServer*, NimBLEConnInfo&) override { bleClients++; }
-  void onDisconnect(NimBLEServer*, NimBLEConnInfo&, int) override {
+class SrvCb : public BLEServerCallbacks {
+  void onConnect(BLEServer*) override { bleClients++; }
+  void onDisconnect(BLEServer*) override {
     if (bleClients > 0) bleClients--;
     advAt = millis() + 400;                                 // re-advertise from loop(), after the stack settled
   }
 };
-class CmdCb : public NimBLECharacteristicCallbacks {
-  void onWrite(NimBLECharacteristic* c, NimBLEConnInfo&) override {
+class CmdCb : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) override {
     Line l = {};
-    std::string v = c->getValue();
+    String v = c->getValue();
     strncpy(l.s, v.c_str(), sizeof l.s - 1);
     l.src = 0;
     xQueueSend(cmdQ, &l, 0);
@@ -359,31 +280,34 @@ class CmdCb : public NimBLECharacteristicCallbacks {
 };
 
 static void bleInit() {
-  NimBLEDevice::init(devName);
-  NimBLEDevice::setMTU(247);
-  NimBLEServer* srv = NimBLEDevice::createServer();
+  BLEDevice::init(devName);
+  BLEDevice::setMTU(247);
+  BLEServer* srv = BLEDevice::createServer();
   srv->setCallbacks(new SrvCb());
 
-  NimBLEService* hrs = srv->createService(NimBLEUUID((uint16_t)0x180D));
-  chHr = hrs->createCharacteristic(NimBLEUUID((uint16_t)0x2A37), NIMBLE_PROPERTY::NOTIFY);
-  NimBLECharacteristic* loc = hrs->createCharacteristic(NimBLEUUID((uint16_t)0x2A38), NIMBLE_PROPERTY::READ);
+  BLEService* hrs = srv->createService(BLEUUID((uint16_t)0x180D));
+  chHr = hrs->createCharacteristic(BLEUUID((uint16_t)0x2A37), BLECharacteristic::PROPERTY_NOTIFY);
+  BLECharacteristic* loc = hrs->createCharacteristic(BLEUUID((uint16_t)0x2A38), BLECharacteristic::PROPERTY_READ);
   uint8_t other = 0;                                        // body sensor location: "other" (upper arm)
   loc->setValue(&other, 1);
+  hrs->start();
 
-  NimBLEService* bas = srv->createService(NimBLEUUID((uint16_t)0x180F));
-  chBat = bas->createCharacteristic(NimBLEUUID((uint16_t)0x2A19), NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY);
+  BLEService* bas = srv->createService(BLEUUID((uint16_t)0x180F));
+  chBat = bas->createCharacteristic(BLEUUID((uint16_t)0x2A19), BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  bas->start();
 
-  NimBLEService* nb = srv->createService(NB_SVC);
-  chTelem = nb->createCharacteristic(NB_TELEM, NIMBLE_PROPERTY::NOTIFY | NIMBLE_PROPERTY::READ);
-  chWave = nb->createCharacteristic(NB_WAVE, NIMBLE_PROPERTY::NOTIFY);
-  NimBLECharacteristic* cmd = nb->createCharacteristic(NB_CMD, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  BLEService* nb = srv->createService(NB_SVC);
+  chTelem = nb->createCharacteristic(NB_TELEM, BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
+  chWave = nb->createCharacteristic(NB_WAVE, BLECharacteristic::PROPERTY_NOTIFY);
+  BLECharacteristic* cmd = nb->createCharacteristic(NB_CMD, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
   cmd->setCallbacks(new CmdCb());
+  nb->start();
 
-  NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+  BLEAdvertising* adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(NB_SVC);
-  adv->addServiceUUID(NimBLEUUID((uint16_t)0x180D));
-  adv->enableScanResponse(true);
-  adv->start();
+  adv->addServiceUUID(BLEUUID((uint16_t)0x180D));
+  adv->setScanResponse(true);
+  BLEDevice::startAdvertising();
 }
 
 static void send(const char* s, uint8_t src) {
@@ -475,15 +399,14 @@ static void handleCommands() {
 
 // ---------------------------------------------------------------- setup / loop
 void setup() {
-  wakeGate();
   pinMode(PIN_PWR, OUTPUT);
-  digitalWrite(PIN_PWR, HIGH);                  // peripheral power (LCD, touch) on battery
+  digitalWrite(PIN_PWR, HIGH);                  // first thing: keep the board powered when running on battery
   Serial.begin(115200);
   Serial.setTxTimeoutMs(0);                     // never block the render loop when nobody reads the USB port
   pinMode(PIN_LINK, OUTPUT);
-  digitalWrite(PIN_LINK, HIGH);                 // jam hidup (wakeGate() sudah lolos)
-  pinMode(PIN_BTN_PREV, INPUT_PULLUP);
+  digitalWrite(PIN_LINK, HIGH);                 // jam hidup
   pinMode(PIN_BTN_NEXT, INPUT_PULLUP);
+  pwrKeyBegin();
   ledcAttach(PIN_BL, 20000, 8);
   ledcWrite(PIN_BL, 0);
 
@@ -493,15 +416,12 @@ void setup() {
 
   displayInit();
   if (!assetsInit()) {
-    // no asset image flashed: a plain wine screen + instructions on the serial port
-    for (int i = 0; i < gfx::W * BAND; i++) band[0][i] = gfx::hex(0x8A6A00);
-    xSemaphoreTake(bandFree[0], portMAX_DELAY);
-    esp_lcd_panel_draw_bitmap(panel, 0, 0, gfx::W, BAND, band[0]);
-    xSemaphoreTake(bandFree[1], portMAX_DELAY);
-    esp_lcd_panel_draw_bitmap(panel, 0, BAND, gfx::W, gfx::H, band[0]);
+    // no asset image flashed: a plain gold screen + instructions on the serial port
+    for (int i = 0; i < gfx::W * BAND; i++) bandBuf[i] = gfx::hex(0x8A6A00);
+    for (int b = 0; b < BAND_N; b++) panel->draw16bitRGBBitmap(0, b * BAND, bandBuf, gfx::W, BAND);
     ledcWrite(PIN_BL, 200);
     while (true) {
-      Serial.println("# assets partition missing or stale: flash build/fw/assets.bin at 0x310000");
+      Serial.println("# assets partition missing or stale: flash build/assets.bin at 0x310000");
       delay(2000);
     }
   }
@@ -509,9 +429,10 @@ void setup() {
   battery::begin();
   sensors::begin();
   model.real = true;                            // show measured values only
-  if (rtcTimeSet && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {   // back from power-off: restore the clock
-    struct timeval tv;
-    gettimeofday(&tv, nullptr);
+  struct timeval tv0;
+  gettimeofday(&tv0, nullptr);
+  if (rtcTimeSet && esp_reset_reason() == ESP_RST_SW && tv0.tv_sec > 1700000000) {   // restart after "power off" on USB: keep the clock
+    struct timeval tv = tv0;
     model.epochOffset = (int64_t)tv.tv_sec + rtcTzMin * 60 - (int64_t)uptime();
     model.tzMin = rtcTzMin;
     model.timeValid = true;
@@ -524,11 +445,7 @@ void setup() {
   cloud::begin(devName);                        // jalur utama: WiFi -> Realtime Database. BLE menyusul di loop()
   Serial.printf("# mem: %u internal bebas, blok terbesar %u\n", (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-  goTop = xSemaphoreCreateBinary();
-  doneTop = xSemaphoreCreateBinary();
-  xTaskCreatePinnedToCore(renderTopTask, "render0", 6144, nullptr, 3, nullptr, 0);
-  Serial.printf("# %s ready, banded dual-core render, heap %u, psram %u\n", devName,
-                (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getFreePsram());
+  Serial.printf("# %s ready (ESP32-C6, %d-row bands), heap %u\n", devName, BAND, (unsigned)ESP.getFreeHeap());
 }
 
 void loop() {
@@ -562,7 +479,7 @@ void loop() {
     if (freeInt >= 85000) { bleInit(); bleUp = true; }
     Serial.printf("# ble %s (internal bebas %u)\n", bleUp ? "aktif" : "dilewati: RAM kurang", (unsigned)freeInt);
   }
-  if (bleUp && advAt && (int32_t)(millis() - advAt) >= 0) { advAt = 0; NimBLEDevice::startAdvertising(); }
+  if (bleUp && advAt && (int32_t)(millis() - advAt) >= 0) { advAt = 0; BLEDevice::startAdvertising(); }
   handleCommands();
   static uint32_t batT = 0;
   if (millis() - batT > 500) { batT = millis(); batteryRead(); }
@@ -578,7 +495,7 @@ void loop() {
                   battery::isCharging() ? "DICAS (persen perkiraan, maks 99)" : "baterai");
   }
   static uint32_t dbgT = 0;
-  if (millis() - dbgT >= 10000) {                   // 400 detik terakhir: "up;detik_ke_belakang,w,sd,pk,st;..." -> /devices/esplilygo/dbg
+  if (millis() - dbgT >= 10000) {                   // 400 detik terakhir: "up;detik_ke_belakang,w,sd,pk,st;..." -> /devices/novasports/dbg
     dbgT = millis();
     uint32_t n = sensors::data.ringN, cnt = n < 400 ? n : 400;
     String t; t.reserve(cnt * 14 + 40);
@@ -608,17 +525,14 @@ void loop() {
   ledcWrite(PIN_BL, constrain(bl, 0, 255));
 
   uint32_t r0 = micros();
-  xSemaphoreGive(goTop);                        // core 0 starts on the top band
-  xSemaphoreTake(bandFree[1], portMAX_DELAY);   // bottom band off the bus?
-  uint32_t r1 = micros();
-  ui.render(canvasBot);                         // core 1 draws the bottom band
-  uint32_t r2 = micros();
-  xSemaphoreTake(doneTop, portMAX_DELAY);
-  if (micros() - nowUs > 150000) Serial.printf("# slow frame: input %u ms, wait bus %u ms, render %u ms, wait top %u ms\n",
-      (unsigned)((r0 - nowUs) / 1000), (unsigned)((r1 - r0) / 1000), (unsigned)((r2 - r1) / 1000), (unsigned)((micros() - r2) / 1000));
+  for (int b = 0; b < BAND_N; b++) {            // four bands: draw, ship over SPI, sample the touch panel in between
+    canvas.band(bandBuf, b * BAND, (b + 1) * BAND);
+    ui.render(canvas);
+    panel->draw16bitRGBBitmap(0, b * BAND, bandBuf, gfx::W, BAND);
+    touchPoll();
+  }
   renderMs += (micros() - r0) / 1000.f;
-  esp_lcd_panel_draw_bitmap(panel, 0, 0, gfx::W, BAND, band[0]);
-  esp_lcd_panel_draw_bitmap(panel, 0, BAND, gfx::W, gfx::H, band[1]);
+  if (micros() - nowUs > 250000) Serial.printf("# slow frame: input %u ms, render %u ms\n", (unsigned)((r0 - nowUs) / 1000), (unsigned)((micros() - r0) / 1000));
 
   frames++;
   if (millis() - statT >= 5000) {
@@ -627,6 +541,6 @@ void loop() {
     worstDt = 0;
     statT = millis(); frames = 0; renderMs = 0;
   }
-  // cap at ~60 fps
-  while (micros() - nowUs < 15500) { touchPoll(); delay(3); }   // keep sampling the panel; also yields to BLE / USB
+  // cap at ~30 fps (the C6 renders slower than that; this only matters for light frames)
+  while (micros() - nowUs < 33000) { touchPoll(); delay(3); }   // keep sampling the panel; also yields to BLE / USB
 }
