@@ -28,7 +28,7 @@ inline uint8_t A8(float v) { return (uint8_t)(clamp01(v) * 255.f); }
 
 // deterministic bokeh specks: far (behind the cards) and near (in front of them)
 struct Speck { float x, y, r, v, a; uint16_t c; };
-Speck far_[8], near_[2];       // few specks: the C6 has no FPU, every glow is a float loop
+Speck far_[18], near_[6];
 
 void seedSpecks() {
   uint32_t s = 12345;
@@ -385,8 +385,12 @@ void Ui::pageLink(Canvas& c, int ox) {
   glass(c, 12 + ox, 28, 216, 106, 0);
   glass(c, 12 + ox, 142, 216, 120, 1);
   int nf = A_->frames(A::SPIN);
-  int f = (int)(t_ * 14.f) % nf;                             // 36 turntable frames, pre-sized to 88 px: a plain blit, no scaling
-  c.sprite(A_->sprite(A::SPIN, f), 22 + ox, 38);
+  float pos = fmodf(t_ * 14.f, (float)nf);                   // 36 turntable frames = 10 deg each
+  int f = (int)pos;
+  float fr = pos - f;
+  c.glow(66 + ox, 82, 40, WINE, 70);
+  c.spriteScaled(A_->sprite(A::SPIN, f), 66.f + ox, 82.f, .86f);
+  c.spriteScaled(A_->sprite(A::SPIN, (f + 1) % nf), 66.f + ox, 82.f, .86f, A8(fr));   // cross-fade to the next frame
   const char* st;
   uint16_t sc;
   float blink = 1;
@@ -407,17 +411,9 @@ void Ui::pageLink(Canvas& c, int ox) {
   int n = q.w, px = 3, box = n * px + 8;
   int bx = 12 + ox + (216 - box) / 2, by = 142 + (120 - box) / 2;
   c.rrect((float)bx, (float)by, (float)box, (float)box, 6, WHITE, 255);
-  for (int yy = 0; yy < n; yy++) {                          // only rows inside the current band, horizontal runs merged
-    int ry = by + 4 + yy * px;
-    if (ry + px <= c.cy0 || ry >= c.cy1) continue;
-    for (int xx = 0; xx < n;) {
-      if (!mod[yy * n + xx]) { xx++; continue; }
-      int x1 = xx;
-      while (x1 < n && mod[yy * n + x1]) x1++;
-      c.rect(bx + 4 + xx * px, ry, (x1 - xx) * px, px, INK);
-      xx = x1;
-    }
-  }
+  for (int yy = 0; yy < n; yy++)
+    for (int xx = 0; xx < n; xx++)
+      if (mod[yy * n + xx]) c.rect(bx + 4 + xx * px, by + 4 + yy * px, px, px, INK);
 }
 
 // ------------------------------------------------------------------ chrome

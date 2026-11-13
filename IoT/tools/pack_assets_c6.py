@@ -79,7 +79,7 @@ spin = sorted(glob.glob(os.path.join(NB, "build", "screen", "spin", "f_*.png")))
 boxes = [Image.open(f).getchannel("A").point(lambda a: 255 if a > 8 else 0).getbbox() for f in spin]
 ub = (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
 side = max(ub[2] - ub[0], ub[3] - ub[1]); cx, cy = (ub[0] + ub[2]) // 2, (ub[1] + ub[3]) // 2
-SP = 88; blob = bytearray()
+SP = 104; blob = bytearray()
 for f in spin:
     im = Image.open(f).convert("RGBA").crop((cx - side // 2, cy - side // 2, cx + side // 2, cy + side // 2)).resize((SP, SP), Image.LANCZOS)
     a = np.asarray(im); blob += to565(a[..., :3]).tobytes() + a[..., 3].tobytes()
