@@ -1,2 +1,31 @@
 secrets.h
 build/
+
+# ---- Web NovaSport (Firebase) ----
+# Secrets — never commit
+service-account.json
+*.serviceaccount.json
+.env
+.env.*
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# OS / editor / build
+node_modules/
+__pycache__/
+.DS_Store
+Thumbs.db
+
+# Materi bisnis, media besar, dokumen hukum, dan cadangan — tetap lokal (repo publik)
+00_BRAND/
+01_PEMASARAN/
+02_VIDEO/
+03_BISNIS/
+99_SUMBER/
+pitchdeck/
+dokumen-ciptaan/
+_backup_public_*/

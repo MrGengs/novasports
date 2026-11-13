@@ -1,0 +1,199 @@
+/* ============================================================
+   NovaSport — Glassmorphism + Aura theme overlay.
+   Loaded AFTER base/app/landing to override surfaces.
+   ============================================================ */
+
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-strong: rgba(255, 255, 255, 0.7);
+  --glass-bd: rgba(255, 255, 255, 0.65);
+  --glass-blur: blur(18px) saturate(165%);
+  --glass-sh: 0 8px 32px rgba(20, 30, 80, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --aura-blur: blur(60px);
+}
+
+/* ---------- Animated aura background ---------- */
+body {
+  background: linear-gradient(180deg, #eef2fd 0%, #e8ecfb 50%, #eaf3fb 100%);
+  position: relative;
+}
+/* soft drifting color blobs behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 38% at 16% 18%, rgba(59, 101, 242, 0.42), transparent 62%),
+    radial-gradient(34% 34% at 84% 12%, rgba(123, 98, 247, 0.40), transparent 62%),
+    radial-gradient(40% 42% at 82% 86%, rgba(18, 196, 166, 0.34), transparent 62%),
+    radial-gradient(36% 38% at 14% 84%, rgba(245, 158, 11, 0.26), transparent 62%);
+  filter: var(--aura-blur);
+  animation: auraDrift 22s ease-in-out infinite alternate;
+}
+@keyframes auraDrift {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(2%, -2%, 0) scale(1.08); }
+  100% { transform: translate3d(-2%, 2%, 0) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+
+/* Dark hero/login keep their own gradient; give them an aura too */
+.hero, .auth-aside, .welcome, .tech, .cta, .price.featured { position: relative; }
+.hero::before, .welcome::after, .tech::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; border-radius: inherit;
+  background:
+    radial-gradient(30% 50% at 12% 10%, rgba(18, 196, 166, 0.28), transparent 60%),
+    radial-gradient(34% 50% at 88% 0%, rgba(123, 98, 247, 0.32), transparent 60%);
+  mix-blend-mode: screen; animation: auraDrift 18s ease-in-out infinite alternate;
+}
+.welcome::after { border-radius: var(--r-lg); }
+
+/* ---------- Glass surfaces ---------- */
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-bd);
+  box-shadow: var(--glass-sh);
+}
+.card.hover { transition: transform .25s var(--ease), box-shadow .3s var(--ease), border-color .3s; }
+.card.hover:hover {
+  transform: translateY(-4px);
+  border-color: rgba(123, 98, 247, 0.55);
+  box-shadow: 0 16px 44px rgba(59, 101, 242, 0.24), 0 0 0 1px rgba(123,98,247,.25), inset 0 1px 0 rgba(255,255,255,.7);
+}
+
+/* nested cards (inside glass) get a lighter fill so they don't muddy */
+.card .card, .card[style*="surface-2"], .card[style*="var(--surface-2)"] {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
+}
+
+/* Sidebar / topbar glass */
+.sidebar {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(24px) saturate(165%);
+  -webkit-backdrop-filter: blur(24px) saturate(165%);
+  border-right: 1px solid var(--glass-bd);
+}
+.topbar {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border-bottom: 1px solid var(--glass-bd);
+}
+
+/* Inputs / search glass */
+.input, .searchbar input {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(6px);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.input:focus { background: rgba(255, 255, 255, 0.85); }
+
+/* Tabs / pills get a frosty base */
+.tabs { background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); border: 1px solid var(--glass-bd); }
+.tabs button.active { background: rgba(255,255,255,.92); }
+
+/* ---------- Aura glow accents ---------- */
+.logo-mark {
+  position: relative;
+  box-shadow: 0 8px 26px rgba(59, 101, 242, 0.5);
+}
+.logo-mark::after {
+  content: ""; position: absolute; inset: -6px; border-radius: inherit; z-index: -1;
+  background: var(--grad-brand); filter: blur(12px); opacity: .55;
+  animation: pulseAura 2.8s ease-in-out infinite;
+}
+@keyframes pulseAura { 0%,100% { opacity: .4; transform: scale(.96);} 50% { opacity: .7; transform: scale(1.08);} }
+
+/* Stat / section icon tiles → glassy with glow */
+.stat-ic, .seg .ic, .feat .ic, .tech-card .ic, .auth-points .ic {
+  position: relative;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+}
+.stat-ic::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+  background: inherit; filter: blur(10px); opacity: .35;
+}
+
+/* Animated icon base */
+.nsi { display: inline-block; vertical-align: middle; overflow: visible; }
+.nav-item .nsi { filter: drop-shadow(0 0 5px rgba(59,101,242,.0)); transition: filter .25s, transform .25s; }
+.nav-item:hover .nsi { transform: scale(1.12); }
+.nav-item.active .nsi { filter: drop-shadow(0 0 7px rgba(59,101,242,.55)); }
+.stat-ic .nsi, .seg .ic .nsi, .feat .ic .nsi, .tech-card .ic .nsi { filter: drop-shadow(0 1px 6px rgba(0,0,0,.12)); }
+
+/* Active nav item: glass highlight + aura bar glow */
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(59,101,242,.16), rgba(123,98,247,.10));
+  box-shadow: inset 0 0 0 1px rgba(123,98,247,.22);
+}
+.nav-item.active::before { box-shadow: 0 0 12px 1px rgba(59,101,242,.7); }
+
+/* Buttons: aura on primary */
+.btn-primary { position: relative; }
+.btn-primary::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1;
+  background: var(--grad-brand); filter: blur(14px); opacity: .45; transition: opacity .25s;
+}
+.btn-primary:hover::after { opacity: .7; }
+
+/* Pills frosty */
+.pill { backdrop-filter: blur(6px); }
+
+/* ---------- Landing-specific glass ---------- */
+.hero-card {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255,255,255,.7);
+}
+.float-badge {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255,255,255,.6);
+}
+.nav.scrolled {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(20px) saturate(165%);
+  -webkit-backdrop-filter: blur(20px) saturate(165%);
+}
+.seg, .feat, .price:not(.featured), .partners .partner { backdrop-filter: blur(14px); }
+.seg, .feat { background: rgba(255,255,255,.55); border-color: var(--glass-bd); box-shadow: var(--glass-sh); }
+.price:not(.featured) { background: rgba(255,255,255,.55); border-color: var(--glass-bd); box-shadow: var(--glass-sh); }
+.statband { box-shadow: 0 18px 48px rgba(59,101,242,.4); }
+
+/* Auth card glass */
+.auth-main { position: relative; }
+.auth-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-bd);
+  border-radius: var(--r-xl);
+  box-shadow: var(--glass-sh);
+  padding: 34px 30px;
+}
+.role-pick, .demo-btn { background: rgba(255,255,255,.45); backdrop-filter: blur(8px); border-color: var(--glass-bd); }
+.role-pick.active { background: rgba(59,101,242,.12); }
+
+/* Toast glass-dark */
+.toast { background: rgba(12, 20, 48, 0.82); backdrop-filter: blur(14px); border: 1px solid rgba(255,255,255,.12); }
+
+/* Boot loader bg matches aura */
+#boot { background: linear-gradient(180deg,#eef2fd,#e8ecfb) !important; }
+
+/* Scrollbar subtle */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: rgba(123,98,247,.3); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(123,98,247,.5); }
+
+/* Reduce blur cost on small screens for perf */
+@media (max-width: 720px) {
+  :root { --glass-blur: blur(12px) saturate(150%); }
+  .sidebar, .topbar { backdrop-filter: blur(16px) saturate(150%); }
+}

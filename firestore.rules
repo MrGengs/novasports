@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function hasRole(role) {
+      return signedIn() && userDoc().role == role;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // User profiles: a user can read/update their own; admins can read all.
+    match /users/{uid} {
+      allow read: if isSelf(uid) || hasRole('admin_sekolah') || hasRole('admin_pusat');
+      allow create: if isSelf(uid);
+      allow update: if isSelf(uid) || hasRole('admin_sekolah') || hasRole('admin_pusat');
+      allow delete: if hasRole('admin_pusat');
+    }
+
+    // Training sessions are owned by an athlete; coaches/parents linked can read.
+    match /sessions/{sessionId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Classes managed by coaches/school admins.
+    match /classes/{classId} {
+      allow read: if signedIn();
+      allow write: if hasRole('guru') || hasRole('admin_sekolah') || hasRole('admin_pusat');
+    }
+
+    // Nutrition records managed by nutritionist; visible to linked athlete/parent.
+    match /nutrition/{recordId} {
+      allow read: if signedIn();
+      allow write: if hasRole('ahli_gizi') || hasRole('admin_sekolah');
+    }
+
+    // Schools & platform-level data.
+    match /schools/{schoolId} {
+      allow read: if signedIn();
+      allow write: if hasRole('admin_sekolah') || hasRole('admin_pusat');
+    }
+
+    // Leaderboard is world-readable for signed-in users; written by system/coach.
+    match /leaderboard/{entryId} {
+      allow read: if signedIn();
+      allow write: if hasRole('guru') || hasRole('admin_pusat');
+    }
+
+    // Public content (modules, library) readable by anyone signed in.
+    match /content/{docId} {
+      allow read: if signedIn();
+      allow write: if hasRole('admin_pusat');
+    }
+  }
+}
