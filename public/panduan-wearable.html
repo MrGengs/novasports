@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panduan Pembacaan Wearable — NovaSport</title>
+<meta name="description" content="Buku panduan fitur Pembacaan Alat Wearable NovaSport: menghubungkan alat, membaca data sensor, kalibrasi, merekam dan mengekspor data.">
+<meta name="theme-color" content="#0c1430">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Crect width=%27100%27 height=%27100%27 rx=%2726%27 fill=%27%233b65f2%27/%3E%3Ctext x=%2750%27 y=%2768%27 font-size=%2762%27 font-family=%27Arial%27 font-weight=%27bold%27 fill=%27white%27 text-anchor=%27middle%27%3EN%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --ground: #f3f5fb;
+  --paper: #ffffff;
+  --paper-2: #f7f9fe;
+  --ink: #0c1430;
+  --ink-2: #3d4668;
+  --ink-3: #6b7396;
+  --rule: #dfe4f1;
+  --rule-2: #cbd3e8;
+  --blue: #3b65f2;
+  --blue-soft: #e9eefe;
+  --blue-ink: #2146c9;
+  --teal: #0fa88f;
+  --teal-soft: #e0f6f1;
+  --violet: #7058e8;
+  --violet-soft: #efecfd;
+  --amber: #b86e00;
+  --amber-soft: #fdf1dc;
+  --red: #d42f43;
+  --red-soft: #fce8ea;
+  --green: #148a41;
+  --panel: #0c1430;
+  --panel-ink: #c9d4f4;
+  --panel-dim: #6f7ca6;
+  --shadow: 0 1px 2px rgba(12,20,48,.05), 0 8px 28px rgba(12,20,48,.07);
+  --sans: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #090e20; --paper: #10172e; --paper-2: #141c36;
+    --ink: #e6eaf7; --ink-2: #b4bdd9; --ink-3: #8390b6;
+    --rule: #222c4b; --rule-2: #2e3a60;
+    --blue: #7f9dff; --blue-soft: #1a254b; --blue-ink: #a9bcff;
+    --teal: #3fd8bd; --teal-soft: #0f2e32;
+    --violet: #a898ff; --violet-soft: #221d45;
+    --amber: #f5b547; --amber-soft: #2f2410;
+    --red: #ff7b8b; --red-soft: #3a1820;
+    --green: #4cd483;
+    --panel: #060a18; --panel-ink: #c9d4f4; --panel-dim: #6f7ca6;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #090e20; --paper: #10172e; --paper-2: #141c36;
+  --ink: #e6eaf7; --ink-2: #b4bdd9; --ink-3: #8390b6;
+  --rule: #222c4b; --rule-2: #2e3a60;
+  --blue: #7f9dff; --blue-soft: #1a254b; --blue-ink: #a9bcff;
+  --teal: #3fd8bd; --teal-soft: #0f2e32;
+  --violet: #a898ff; --violet-soft: #221d45;
+  --amber: #f5b547; --amber-soft: #2f2410;
+  --red: #ff7b8b; --red-soft: #3a1820;
+  --green: #4cd483;
+  --panel: #060a18; --panel-ink: #c9d4f4; --panel-dim: #6f7ca6;
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.7;
+  padding-inline: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--blue-ink); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 4px; }
+code, .mono { font-family: var(--mono); font-size: .86em; }
+code { background: var(--paper-2); border: 1px solid var(--rule); padding: .08em .38em; border-radius: 5px; color: var(--ink); white-space: nowrap; }
+h1, h2, h3 { text-wrap: balance; letter-spacing: -.02em; line-height: 1.2; margin: 0; }
+p { margin: 0; }
+
+/* ---------- Shell ---------- */
+.book { max-width: 1180px; margin: 0 auto; padding-block: 28px 80px; display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 48px; }
+.toc { position: sticky; top: 24px; align-self: start; max-height: calc(100vh - 48px); overflow: auto; padding-top: 6px; }
+.toc-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 26px; }
+.toc-mark { width: 30px; height: 30px; border-radius: 8px; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: .95rem; }
+.toc-brand b { display: block; font-size: .9rem; line-height: 1.1; }
+.toc-brand span { font-size: .72rem; color: var(--ink-3); }
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.toc a { display: grid; grid-template-columns: 28px 1fr; gap: 6px; padding: 7px 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none; font-size: .86rem; line-height: 1.35; border-left: 2px solid transparent; }
+.toc a .n { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); padding-top: 2px; }
+.toc a:hover { background: var(--paper); color: var(--ink); }
+.toc a.on { background: var(--paper); color: var(--ink); font-weight: 600; border-left-color: var(--blue); }
+.toc a.on .n { color: var(--blue); }
+.toc-foot a { display: inline-block; margin-top: 4px; text-wrap: balance; }
+.toc-foot { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--rule); font-size: .74rem; color: var(--ink-3); line-height: 1.55; }
+
+main { min-width: 0; display: flex; flex-direction: column; gap: 22px; }
+
+/* ---------- Cover ---------- */
+.cover { background: var(--panel); color: #fff; border-radius: 18px; overflow: hidden; position: relative; }
+.cover-body { position: relative; padding: 44px 44px 36px; display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 36px; align-items: end; }
+.cover::before {
+  content: ""; position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(127,157,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(127,157,255,.07) 1px, transparent 1px);
+  background-size: 28px 28px; mask-image: linear-gradient(120deg, transparent 20%, #000 90%);
+}
+.eyebrow { font-family: var(--mono); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
+.cover .eyebrow { color: #7ff0d2; }
+.cover h1 { font-size: clamp(2.1rem, 4.4vw, 3.3rem); font-weight: 800; margin: 14px 0 14px; color: #fff; }
+.cover p.lede { color: var(--panel-ink); font-size: 1.05rem; max-width: 52ch; }
+.cover-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 26px; font-size: .8rem; color: var(--panel-dim); }
+.cover-meta b { color: #fff; font-weight: 600; }
+.readout { background: rgba(255,255,255,.04); border: 1px solid rgba(127,157,255,.18); border-radius: 12px; padding: 16px 16px 12px; font-family: var(--mono); }
+.readout-top { display: flex; justify-content: space-between; font-size: .66rem; color: var(--panel-dim); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 10px; }
+.readout-top i { font-style: normal; color: #7ff0d2; }
+.readout-top i::before { content: "● "; }
+.axis { display: grid; grid-template-columns: 22px 1fr 54px; align-items: center; gap: 8px; font-size: .72rem; height: 26px; }
+.axis span:first-child { font-weight: 600; }
+.axis span:last-child { text-align: right; color: #fff; font-variant-numeric: tabular-nums; }
+.axis svg { width: 100%; height: 20px; display: block; }
+.readout-foot { display: flex; justify-content: space-between; border-top: 1px solid rgba(127,157,255,.15); margin-top: 8px; padding-top: 9px; font-size: .68rem; color: var(--panel-dim); }
+.readout-foot b { color: #fff; font-weight: 500; }
+
+/* ---------- Chapters ---------- */
+.chapter { background: var(--paper); border: 1px solid var(--rule); border-radius: 16px; padding: 40px 44px 44px; display: flex; flex-direction: column; gap: 20px; }
+.ch-head { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; align-items: baseline; padding-bottom: 20px; border-bottom: 1px solid var(--rule); }
+.ch-num { font-family: var(--mono); font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; color: var(--blue); grid-column: 1 / -1; }
+.ch-head h2 { font-size: clamp(1.5rem, 2.6vw, 1.95rem); font-weight: 800; grid-column: 1 / -1; }
+.ch-head p { grid-column: 1 / -1; color: var(--ink-2); max-width: 64ch; }
+.chapter h3 { font-size: 1.12rem; font-weight: 700; margin-top: 10px; }
+.chapter > p, .chapter .prose p { max-width: 68ch; color: var(--ink-2); }
+.chapter > p strong, .prose strong, td strong { color: var(--ink); font-weight: 650; }
+
+/* steps — real sequences only */
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: flex; flex-direction: column; }
+.steps > li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0,1fr); gap: 16px; padding: 0 0 20px; position: relative; }
+.steps > li::before { content: counter(s); width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--blue); color: var(--blue); display: grid; place-items: center; font-weight: 700; font-size: .88rem; background: var(--paper); position: relative; z-index: 1; }
+.steps > li:not(:last-child)::after { content: ""; position: absolute; left: 16.5px; top: 36px; bottom: 2px; width: 1.5px; background: var(--rule-2); }
+.steps > li:last-child { padding-bottom: 0; }
+.steps b.t { display: block; color: var(--ink); font-weight: 650; padding-top: 4px; }
+.steps p { color: var(--ink-2); max-width: 64ch; }
+.steps figure { margin-top: 12px; }
+
+/* notes */
+.note { display: grid; grid-template-columns: 4px minmax(0,1fr); gap: 16px; background: var(--paper-2); border-radius: 10px; padding: 14px 18px 14px 0; overflow: hidden; }
+.note::before { content: ""; background: var(--blue); border-radius: 0 3px 3px 0; }
+.note .lbl { display: block; font-family: var(--mono); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; color: var(--blue-ink); margin-bottom: 2px; }
+.note p { color: var(--ink-2); font-size: .94rem; }
+.note.warn { background: var(--amber-soft); } .note.warn::before { background: var(--amber); } .note.warn .lbl { color: var(--amber); }
+.note.crit { background: var(--red-soft); } .note.crit::before { background: var(--red); } .note.crit .lbl { color: var(--red); }
+
+/* inline UI tokens: buttons & badges as they appear in the app */
+.ui { display: inline-flex; align-items: center; gap: 4px; font-size: .82em; font-weight: 650; padding: .1em .6em; border-radius: 999px; white-space: nowrap; vertical-align: .05em; line-height: 1.5; }
+.ui.btn { background: var(--blue); color: #fff; }
+.ui.out { border: 1px solid var(--rule-2); color: var(--blue-ink); background: var(--paper); }
+.ui.red { border: 1px solid var(--red); color: var(--red); background: var(--paper); }
+.ui.sim { background: var(--amber-soft); color: var(--amber); }
+.ui.ble { background: var(--teal-soft); color: var(--teal); }
+
+/* figures */
+figure { margin: 0; }
+.shot { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; background: var(--paper-2); box-shadow: var(--shadow); }
+.shot img { display: block; width: 100%; height: auto; }
+figcaption { font-size: .8rem; color: var(--ink-3); margin-top: 10px; }
+figcaption b { font-family: var(--mono); font-weight: 500; font-size: .72rem; letter-spacing: .06em; color: var(--ink-2); margin-right: 6px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.w-sm { max-width: 340px; }
+.w-md { max-width: 560px; }
+
+/* annotated overview */
+.annot { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 28px; align-items: start; }
+.stage { position: relative; }
+.stage .shot { position: relative; }
+.hl { position: absolute; border: 2px solid var(--blue); border-radius: 12px; background: rgba(59,101,242,.08); opacity: 0; transition: opacity .18s; pointer-events: none; }
+.hl.on { opacity: 1; }
+.pin { position: absolute; width: 26px; height: 26px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--blue); color: #fff; border: 2px solid #fff; font: 700 .74rem/1 var(--sans); display: grid; place-items: center; box-shadow: 0 2px 8px rgba(12,20,48,.35); cursor: pointer; padding: 0; transition: transform .15s; }
+.pin.on, .pin:hover { transform: scale(1.18); background: var(--ink); }
+.legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.legend li { display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 12px; padding: 9px 10px; border-radius: 9px; cursor: default; }
+.legend li.on { background: var(--blue-soft); }
+.legend .k { width: 24px; height: 24px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: .72rem; display: grid; place-items: center; margin-top: 1px; }
+.legend b { display: block; font-size: .9rem; color: var(--ink); line-height: 1.35; }
+.legend span { font-size: .8rem; color: var(--ink-3); line-height: 1.5; display: block; }
+.legend a { font-size: .74rem; font-family: var(--mono); }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; min-width: 520px; }
+th { text-align: left; font-family: var(--mono); font-size: .68rem; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); background: var(--paper-2); padding: 11px 16px; border-bottom: 1px solid var(--rule); }
+td { padding: 12px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); line-height: 1.55; }
+tr:last-child td { border-bottom: 0; }
+td.num { font-family: var(--mono); font-size: .84rem; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); }
+.yes { color: var(--green); font-weight: 650; }
+.no { color: var(--ink-3); }
+.chip { display: inline-block; font-family: var(--mono); font-size: .72rem; padding: 1px 7px; border-radius: 5px; background: var(--blue-soft); color: var(--blue-ink); margin: 1px 2px 1px 0; }
+
+/* HR zones */
+.zones { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); border-radius: 12px; overflow: hidden; border: 1px solid var(--rule); }
+.zone { padding: 14px 14px 12px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; gap: 2px; position: relative; }
+.zone:last-child { border-right: 0; }
+.zone::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--c); }
+.zone .z { font-family: var(--mono); font-size: .72rem; color: var(--ink-3); margin-top: 4px; }
+.zone b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.zone span { font-size: .78rem; color: var(--ink-3); line-height: 1.4; }
+
+/* values grid */
+.defs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.def { padding: 18px 20px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; gap: 6px; }
+.def:last-child { border-right: 0; }
+.def .u { font-family: var(--mono); font-size: .72rem; color: var(--blue-ink); letter-spacing: .04em; }
+.def b { font-size: 1rem; }
+.def p { font-size: .86rem; color: var(--ink-2); }
+
+/* log anatomy */
+.logline { background: var(--panel); border-radius: 12px; padding: 22px 22px 16px; overflow-x: auto; }
+.logline pre { margin: 0; font-family: var(--mono); font-size: .86rem; color: var(--panel-ink); white-space: pre; }
+.logline pre span { border-bottom: 2px solid; padding-bottom: 2px; }
+.logkey { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 14px; font-size: .78rem; color: var(--panel-dim); }
+.logkey i { font-style: normal; display: inline-block; width: 10px; height: 3px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+
+/* byte map */
+.bytemap { overflow-x: auto; padding-bottom: 4px; }
+.bytes { display: grid; grid-template-columns: repeat(10, minmax(58px, 1fr)); gap: 4px; min-width: 620px; }
+.field { border-radius: 8px; padding: 10px 8px 9px; text-align: center; background: var(--bg); color: var(--fg); }
+.field b { display: block; font-family: var(--mono); font-size: .86rem; font-weight: 600; }
+.field span { display: block; font-family: var(--mono); font-size: .64rem; opacity: .85; margin-top: 2px; }
+.f-a { --bg: var(--blue-soft); --fg: var(--blue-ink); }
+.f-g { --bg: var(--teal-soft); --fg: var(--teal); }
+.f-m { --bg: var(--violet-soft); --fg: var(--violet); }
+.f-s { --bg: var(--paper-2); --fg: var(--ink-2); outline: 1px dashed var(--rule-2); outline-offset: -1px; }
+.ruler { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); min-width: 620px; margin-top: 6px; font-family: var(--mono); font-size: .6rem; color: var(--ink-3); text-align: center; }
+.bm-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 12px; font-size: .8rem; color: var(--ink-2); }
+.bm-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--bg); vertical-align: -1px; margin-right: 6px; }
+
+pre.code { margin: 0; background: var(--paper-2); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; font-family: var(--mono); font-size: .82rem; line-height: 1.65; overflow-x: auto; color: var(--ink); }
+pre.code .c { color: var(--ink-3); }
+
+.faq { display: flex; flex-direction: column; border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.faq details { border-bottom: 1px solid var(--rule); }
+.faq details:last-child { border-bottom: 0; }
+.faq summary { list-style: none; cursor: pointer; padding: 15px 48px 15px 20px; font-weight: 650; color: var(--ink); position: relative; font-size: .96rem; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; position: absolute; right: 20px; top: 12px; font-size: 1.3rem; font-weight: 400; color: var(--ink-3); }
+.faq details[open] summary::after { content: "–"; }
+.faq summary:hover { background: var(--paper-2); }
+.faq .ans { padding: 0 20px 18px; display: grid; grid-template-columns: 96px minmax(0,1fr); gap: 6px 14px; font-size: .9rem; }
+.faq .ans dt { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); padding-top: 4px; }
+.faq .ans dd { margin: 0; color: var(--ink-2); }
+
+.endnote { text-align: center; font-size: .8rem; color: var(--ink-3); padding-top: 12px; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .book { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .toc { position: static; max-height: none; background: var(--paper); border: 1px solid var(--rule); border-radius: 16px; padding: 20px; }
+  .toc ol { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 12px; }
+  .toc-foot { display: none; }
+  .annot { grid-template-columns: minmax(0, 1fr); }
+  .legend { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 2px 12px; }
+}
+@media (max-width: 760px) {
+  .cover-body { grid-template-columns: minmax(0, 1fr); padding: 30px 22px 26px; gap: 26px; }
+  .chapter { padding: 26px 20px 28px; border-radius: 14px; }
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  .defs { grid-template-columns: minmax(0, 1fr); }
+  .def { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .def:last-child { border-bottom: 0; }
+  .zones { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .zone { border-bottom: 1px solid var(--rule); }
+  .zone:nth-child(2n) { border-right: 0; }
+  .legend { grid-template-columns: minmax(0, 1fr); }
+  .toc ol { grid-template-columns: minmax(0, 1fr); }
+  .pin { width: 20px; height: 20px; font-size: .62rem; margin: -6px 0 0 -6px; border-width: 1.5px; }
+  .faq .ans { grid-template-columns: minmax(0, 1fr); }
+  .faq .ans dt { padding-top: 8px; }
+  .book { padding-block: 16px 48px; }
+}
+
+/* ---------- Print: it is a book ---------- */
+/* diagram alur (SVG digambar langsung, tanpa pustaka) */
+.diagram { border: 1px solid var(--rule); border-radius: 12px; padding: 20px 18px 14px; background: var(--paper-2); overflow-x: auto; }
+.diagram svg { width: 100%; min-width: 520px; height: auto; display: block; }
+.diagram .ln path { fill: none; stroke: var(--rule-2); stroke-width: 1.6; }
+.diagram .node rect { fill: var(--paper); stroke: var(--rule-2); stroke-width: 1.4; }
+.diagram .node.accent rect { fill: var(--blue-soft); stroke: var(--blue); }
+.diagram .node.alt rect { fill: var(--paper-2); stroke-dasharray: 4 3; }
+.diagram .node.warn rect { fill: var(--amber-soft); stroke: var(--amber); }
+.diagram .node.ok rect { fill: var(--teal-soft); stroke: var(--teal); }
+.diagram .node.end rect { fill: var(--paper-2); stroke: var(--rule-2); }
+.diagram .dec path { fill: var(--violet-soft); stroke: var(--violet); stroke-width: 1.4; }
+.diagram text { font-family: var(--sans); font-size: 12.5px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+.diagram .dec text { fill: var(--violet); font-size: 12px; }
+.diagram text.sm { font-size: 11px; font-weight: 500; fill: var(--ink-3); }
+.diagram text.lbl { font-family: var(--mono); font-size: 10.5px; font-weight: 500; fill: var(--ink-3); text-anchor: start; }
+.diagram figcaption { margin-top: 12px; }
+
+/* rumus */
+.eqs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.eq { border: 1px solid var(--rule); border-radius: 12px; padding: 15px 17px 14px; background: var(--paper-2); display: flex; flex-direction: column; gap: 7px; }
+.eq .u { font-family: var(--mono); font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; color: var(--blue-ink); }
+.eq .f { font-family: var(--mono); font-size: .84rem; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 7px; padding: 8px 11px; line-height: 1.6; overflow-x: auto; white-space: nowrap; }
+.eq .f sub { font-size: .76em; }
+.eq .f .w { color: var(--ink-3); font-size: .82em; margin-left: 10px; }
+.eq p { font-size: .84rem; color: var(--ink-2); margin: 0; }
+@media (max-width: 860px) { .eqs { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Print / PDF: it is a book ---------- */
+@page { size: A4; margin: 16mm 15mm 18mm; }
+@page :first { margin: 0; }
+@media print {
+  :root, :root:not([data-theme="light"]), :root[data-theme="dark"] { --ground:#f3f5fb;--paper:#fff;--paper-2:#f7f9fe;--ink:#0c1430;--ink-2:#3d4668;--ink-3:#6b7396;--rule:#dfe4f1;--rule-2:#cbd3e8;--blue:#3b65f2;--blue-soft:#e9eefe;--blue-ink:#2146c9;--teal:#0fa88f;--teal-soft:#e0f6f1;--violet:#7058e8;--violet-soft:#efecfd;--amber:#b86e00;--amber-soft:#fdf1dc;--red:#d42f43;--red-soft:#fce8ea;--green:#148a41;--panel:#0c1430; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { background: #fff; padding: 0; font-size: 10.5pt; line-height: 1.6; }
+  .book { display: block; padding: 0; max-width: none; }
+  .toc, .no-print, .hl, .faq summary::after { display: none !important; }
+  main { display: block; }
+  .cover { border-radius: 0; height: 297mm; display: flex; align-items: flex-end; break-after: page; }
+  .cover-body { grid-template-columns: minmax(0,1fr); padding: 0 18mm 26mm; gap: 34px; width: 100%; }
+  .cover h1 { font-size: 40pt; }
+  .cover .readout { max-width: 90mm; }
+  .print-toc { display: block !important; break-after: page; }
+  .chapter { border: 0; border-radius: 0; padding: 0; break-before: page; gap: 14px; }
+  .chapter:first-of-type { break-before: auto; }
+  .ch-head { break-after: avoid; }
+  .chapter h3 { break-after: avoid; }
+  .shot { box-shadow: none; }
+  .pair { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .defs { grid-template-columns: repeat(3, minmax(0,1fr)); }
+  .def { border-right: 1px solid var(--rule); border-bottom: 0; }
+  .def:last-child { border-right: 0; }
+  .zones { grid-template-columns: repeat(5, minmax(0,1fr)); }
+  .zone { border-bottom: 0; border-right: 1px solid var(--rule); }
+  .zone:last-child { border-right: 0; }
+  .annot { grid-template-columns: minmax(0,1fr); gap: 16px; }
+  .legend { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 14px; }
+  .legend li { padding: 5px 6px; }
+  .pin { width: 22px; height: 22px; font-size: .64rem; margin: -7px 0 0 -7px; }
+  .w-sm { max-width: 62mm; } .w-md { max-width: 110mm; }
+  .steps > li { break-inside: avoid; }
+  .faq summary { padding: 11px 16px 4px; }
+  .faq .ans { grid-template-columns: 80px minmax(0,1fr); padding: 0 16px 12px; }
+  .faq details, figure, .note, tr, .zones, .defs, .bytemap, pre.code, .logline { break-inside: avoid; }
+  .tbl-wrap { break-inside: avoid; }
+  .eqs { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .eq, .diagram { break-inside: avoid; }
+  .diagram { background: #fff; }
+  .diagram svg { min-width: 0; }
+  .annot .stage { max-width: 128mm; margin: 0 auto; }
+  .annot { break-inside: avoid; }
+  .bytes, .ruler { min-width: 0; }
+  .field { padding: 7px 4px; }
+  table { min-width: 0; font-size: 9.5pt; }
+  a { color: inherit; text-decoration: none; }
+  .endnote { margin-top: 24px; }
+}
+.print-toc { display: none; }
+.print-toc h2 { font-size: 22pt; font-weight: 800; margin: 0 0 8mm; }
+.print-toc ol { list-style: none; padding: 0; margin: 0; }
+.print-toc li { display: grid; grid-template-columns: 16mm 1fr; padding: 4.2mm 0; border-bottom: 1px solid var(--rule); }
+.print-toc .n { font-family: var(--mono); color: var(--blue); font-size: 9pt; padding-top: 3px; }
+.print-toc b { display: block; font-size: 12.5pt; }
+.print-toc span.d { color: var(--ink-3); font-size: 9.5pt; }
+.dl-pdf { display: inline-flex; align-items: center; gap: 6px; background: #fff; color: #0c1430; font-weight: 700; font-size: .82rem; padding: 7px 14px; border-radius: 999px; text-decoration: none; }
+.dl-pdf:hover { background: #dbe6ff; }
+</style>
+</head>
+<body>
+<div class="book">
+
+<nav class="toc" aria-label="Daftar isi">
+  <div class="toc-brand"><div class="toc-mark">N</div><div><b>NovaSport</b><span>Buku Panduan</span></div></div>
+  <ol id="toc">
+    <li><a href="#sekilas"><span class="n">01</span>Sekilas fitur</a></li>
+    <li><a href="#membuka"><span class="n">02</span>Membuka halaman</a></li>
+    <li><a href="#tampilan"><span class="n">03</span>Mengenal tampilan</a></li>
+    <li><a href="#menghubungkan"><span class="n">04</span>Menghubungkan perangkat</a></li>
+    <li><a href="#membaca"><span class="n">05</span>Membaca data sensor</a></li>
+    <li><a href="#kalibrasi"><span class="n">06</span>Kalibrasi nol</a></li>
+    <li><a href="#merekam"><span class="n">07</span>Merekam &amp; mengekspor</a></li>
+    <li><a href="#masalah"><span class="n">08</span>Pemecahan masalah</a></li>
+    <li><a href="#teknis"><span class="n">09</span>Lampiran teknis</a></li>
+    <li><a href="#kode"><span class="n">10</span>Dokumentasi kode</a></li>
+    <li><a href="#algoritma"><span class="n">11</span>Algoritma &amp; rumus</a></li>
+  </ol>
+  <div class="toc-foot">Versi 1.1 · September 2026<br>Berlaku untuk halaman <span class="mono">/app#/pembacaan</span><br><br><a href="/app#/pembacaan">← Buka Pembacaan Sensor</a></div>
+</nav>
+
+<main>
+
+<header class="cover">
+  <div class="cover-body">
+    <div>
+      <div class="eyebrow">Buku Panduan · Smart-Enabled Equipment</div>
+      <h1>Pembacaan Alat Wearable</h1>
+      <p class="lede">Cara menghubungkan wearable NovaSport, membaca data sensornya secara real-time, lalu merekam sesi latihan menjadi file CSV atau JSON untuk dianalisis. Dilengkapi dokumentasi kode dan algoritmanya untuk pengembang.</p>
+      <div class="cover-meta">
+        <span>Untuk <b>Siswa / Atlet</b> dan <b>Guru / Pelatih</b></span>
+        <span>Versi <b>1.1</b></span>
+        <span><b>nova-sport-id.web.app</b></span>
+      </div>
+      <p class="no-print" style="margin-top:22px"><a class="dl-pdf" href="/panduan-wearable.pdf" download>⭳ Unduh versi PDF</a></p>
+    </div>
+    <div class="readout" aria-hidden="true">
+      <div class="readout-top"><span>IMU Wearable Band</span><i>100 Hz</i></div>
+      <div id="coverAxes"></div>
+      <div class="readout-foot"><span>HR <b>118 bpm</b></span><span>seq <b>04212</b></span><span>drop <b>0</b></span></div>
+    </div>
+  </div>
+</header>
+
+<section class="print-toc"><h2>Daftar isi</h2><ol><li><span class="n">BAB 01</span><div><b>Sekilas fitur</b><span class="d">Sumber data Bluetooth dan simulasi, kebutuhan browser</span></div></li><li><span class="n">BAB 02</span><div><b>Membuka halaman</b><span class="d">Masuk aplikasi dan menuju Pembacaan Sensor</span></div></li><li><span class="n">BAB 03</span><div><b>Mengenal tampilan</b><span class="d">Sepuluh bagian utama halaman</span></div></li><li><span class="n">BAB 04</span><div><b>Menghubungkan perangkat</b><span class="d">Pairing Bluetooth dan profil perangkat</span></div></li><li><span class="n">BAB 05</span><div><b>Membaca data sensor</b><span class="d">Orientasi, IMU, heart rate, kualitas sinyal, log</span></div></li><li><span class="n">BAB 06</span><div><b>Kalibrasi nol</b><span class="d">Menyetel titik acuan sensor</span></div></li><li><span class="n">BAB 07</span><div><b>Merekam &amp; mengekspor</b><span class="d">Merekam sesi, isi file CSV dan JSON</span></div></li><li><span class="n">BAB 08</span><div><b>Pemecahan masalah</b><span class="d">Masalah umum, penyebab, dan solusinya</span></div></li><li><span class="n">BAB 09</span><div><b>Lampiran teknis</b><span class="d">Layanan GATT, format frame, skala konversi</span></div></li><li><span class="n">BAB 10</span><div><b>Dokumentasi kode</b><span class="d">Berkas, state, diagram alur, dan peta fungsi</span></div></li><li><span class="n">BAB 11</span><div><b>Algoritma &amp; rumus</b><span class="d">Diagram keputusan, dekoder, orientasi, ringkasan rumus</span></div></li></ol></section>
+
+<!-- 01 -->
+<section class="chapter" id="sekilas">
+  <div class="ch-head">
+    <div class="ch-num">Bab 01</div>
+    <h2>Sekilas fitur</h2>
+    <p>Halaman <strong>Pembacaan Sensor</strong> menampilkan data yang dikirim alat wearable NovaSport secara langsung: gerak dan orientasi dari sensor IMU 9-sumbu, detak jantung, baterai, serta kualitas koneksinya.</p>
+  </div>
+
+  <p>Data di halaman ini bisa berasal dari <strong>dua sumber</strong>. Halaman memilihnya secara otomatis, jadi biasakan selalu melihat badge sumber data sebelum membaca angka apa pun.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Sumber data</th><th>Badge</th><th>Kapan dipakai</th><th>Angka yang tampil</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Perangkat nyata</strong></td><td><span class="ui ble">Bluetooth</span></td><td>Setelah Anda memilih alat di dialog pairing dan koneksi berhasil.</td><td>Hasil pengukuran sungguhan dari alat.</td></tr>
+        <tr><td><strong>Simulasi</strong></td><td><span class="ui sim">Simulasi</span></td><td>Saat halaman dibuka, jika browser tidak mendukung Bluetooth, jika pairing dibatalkan, atau jika alat terputus.</td><td>Contoh sinyal yang dibuat halaman. <strong>Bukan data Anda.</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="note crit">
+    <div><span class="lbl">Penting</span><p>Jika alat terputus di tengah sesi, halaman <strong>langsung beralih ke simulasi</strong> dan grafik tetap bergerak. Muncul pemberitahuan “Perangkat terputus.”, tetapi mudah terlewat. Sebelum mencatat hasil, pastikan badge menunjukkan <span class="ui ble">Bluetooth</span>.</p></div>
+  </div>
+
+  <h3>Yang Anda butuhkan</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Browser</th><th>Perangkat nyata (Bluetooth)</th><th>Mode simulasi</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Google Chrome</strong>, <strong>Microsoft Edge</strong>, Opera: laptop / PC</td><td class="yes">Didukung</td><td class="yes">Didukung</td></tr>
+        <tr><td><strong>Google Chrome</strong> di Android</td><td class="yes">Didukung</td><td class="yes">Didukung</td></tr>
+        <tr><td>Safari (iPhone, iPad, Mac) dan Firefox</td><td class="no">Tidak didukung</td><td class="yes">Didukung</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Selain browser yang sesuai, Bluetooth di laptop atau ponsel harus menyala, dan halaman dibuka lewat alamat resmi <code>https://nova-sport-id.web.app</code>. Web Bluetooth hanya bekerja di koneksi HTTPS.</p>
+</section>
+
+<!-- 02 -->
+<section class="chapter" id="membuka">
+  <div class="ch-head">
+    <div class="ch-num">Bab 02</div>
+    <h2>Membuka halaman</h2>
+    <p>Fitur ini tersedia untuk peran <strong>Siswa / Atlet</strong> dan <strong>Guru / Pelatih</strong>.</p>
+  </div>
+
+  <ol class="steps">
+    <li><div>
+      <b class="t">Masuk ke aplikasi</b>
+      <p>Buka <code>nova-sport-id.web.app/app</code>. Masuk dengan email dan kata sandi, atau pilih <strong>Siswa / Atlet</strong> pada bagian “jelajahi sebagai Demo per peran” untuk mencoba tanpa akun.</p>
+      <figure class="w-sm"><div class="shot"><img loading="lazy" src="/assets/img/panduan/login.jpg" alt="Layar masuk NovaSport dengan pilihan peran dan tombol demo"></div><figcaption><b>GBR 2.1</b>Layar masuk. Tombol demo ada di bagian bawah.</figcaption></figure>
+    </div></li>
+    <li><div>
+      <b class="t">Buka menu Pembacaan Sensor</b>
+      <p>Di menu samping, pada kelompok <strong>Lainnya</strong>, klik <strong>Pembacaan Sensor</strong> (bertanda <span class="ui btn">LIVE</span>).</p>
+    </div></li>
+    <li><div>
+      <b class="t">Atau mulai dari kartu perangkat</b>
+      <p>Buka <strong>Perangkat Saya</strong>, lalu klik <span class="ui btn">Baca Live</span> pada kartu alat yang ingin dibaca. Tombol ini nonaktif untuk alat berstatus <em>Offline</em>.</p>
+      <figure class="w-md"><div class="shot"><img loading="lazy" src="/assets/img/panduan/devcard.jpg" alt="Kartu perangkat IMU Wearable Band dengan tombol Baca Live"></div><figcaption><b>GBR 2.2</b>Kartu perangkat di halaman Perangkat Saya.</figcaption></figure>
+    </div></li>
+  </ol>
+
+  <div class="note">
+    <div><span class="lbl">Catatan</span><p>Halaman langsung mulai membaca dalam <strong>mode simulasi</strong> saat dibuka, supaya tampilannya bisa dipelajari sebelum ada alat yang terhubung.</p></div>
+  </div>
+</section>
+
+<!-- 03 -->
+<section class="chapter" id="tampilan">
+  <div class="ch-head">
+    <div class="ch-num">Bab 03</div>
+    <h2>Mengenal tampilan</h2>
+    <p>Arahkan kursor ke nomor pada gambar atau ke daftar di sampingnya untuk menyorot bagian yang dimaksud.</p>
+  </div>
+
+  <div class="annot">
+    <figure class="stage">
+      <div class="shot" id="stage"><img loading="lazy" src="/assets/img/panduan/overview.jpg" alt="Tampilan lengkap halaman Pembacaan Alat Wearable"></div>
+      <figcaption><b>GBR 3.1</b>Halaman Pembacaan Alat Wearable di layar laptop, mode simulasi.</figcaption>
+    </figure>
+    <ul class="legend" id="legend">
+      <li data-k="header"><span class="k">1</span><div><b>Kalibrasi &amp; Hubungkan</b><span>Menyambungkan alat lewat Bluetooth dan menyetel titik nol sensor.</span></div></li>
+      <li data-k="stats"><span class="k">2</span><div><b>Ringkasan status</b><span>Nama alat dan sumber data, sampling (Hz), jumlah paket, dan baterai.</span></div></li>
+      <li data-k="source"><span class="k">3</span><div><b>Sumber data</b><span>Profil alat, laju baca, dan kanal sensor yang aktif.</span></div></li>
+      <li data-k="controls"><span class="k">4</span><div><b>Tombol kendali</b><span>Mulai atau jeda pembacaan, rekam sesi, dan putuskan koneksi.</span></div></li>
+      <li data-k="record"><span class="k">5</span><div><b>Rekaman &amp; ekspor</b><span>Jumlah sampel, durasi, serta tombol CSV dan JSON.</span></div></li>
+      <li data-k="orient"><span class="k">6</span><div><b>Orientasi</b><span>Kemiringan alat: roll, pitch, yaw. Kubus ikut miring.</span></div></li>
+      <li data-k="axes"><span class="k">7</span><div><b>Grafik per sumbu</b><span>Akselerometer (g) dan giroskop (°/s) untuk sumbu X, Y, Z.</span></div></li>
+      <li data-k="log"><span class="k">8</span><div><b>Log paket mentah</b><span>Catatan data yang diterima dan kejadian koneksi.</span></div></li>
+      <li data-k="hr"><span class="k">9</span><div><b>Heart rate</b><span>Detak jantung dan tren singkatnya. Warna mengikuti zona.</span></div></li>
+      <li data-k="quality"><span class="k">10</span><div><b>Kualitas sinyal</b><span>Kekuatan sinyal, integritas paket, paket hilang, latensi.</span></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 04 -->
+<section class="chapter" id="menghubungkan">
+  <div class="ch-head">
+    <div class="ch-num">Bab 04</div>
+    <h2>Menghubungkan perangkat</h2>
+    <p>Pakai langkah ini untuk membaca alat sungguhan. Untuk latihan atau presentasi tanpa alat, lewati bab ini, karena mode simulasi sudah berjalan.</p>
+  </div>
+
+  <h3>Sebelum mulai</h3>
+  <p>Pastikan baterai alat cukup, alat dalam keadaan menyala, dan Bluetooth di laptop atau ponsel aktif. Jika alat sedang tersambung ke aplikasi lain, putuskan dulu dari aplikasi tersebut. Alat Bluetooth umumnya hanya bisa tersambung ke satu aplikasi dalam satu waktu.</p>
+
+  <ol class="steps">
+    <li><div>
+      <b class="t">Pilih profil perangkat</b>
+      <p>Pada kartu <strong>Sumber Data</strong>, pilih jenis alat di <strong>Profil Perangkat</strong>. Profil menentukan nama alat yang dicari saat pairing, jadi pilih yang sesuai sebelum menekan Hubungkan.</p>
+      <figure class="w-sm"><div class="shot"><img loading="lazy" src="/assets/img/panduan/source.jpg" alt="Kartu Sumber Data berisi profil perangkat, laju baca, dan kanal aktif"></div><figcaption><b>GBR 4.1</b>Kartu Sumber Data.</figcaption></figure>
+    </div></li>
+    <li><div>
+      <b class="t">Klik Hubungkan Perangkat</b>
+      <p>Klik <span class="ui btn">Hubungkan Perangkat</span> di kanan atas. Browser membuka dialog yang berisi daftar alat Bluetooth di sekitar.</p>
+    </div></li>
+    <li><div>
+      <b class="t">Pilih alat, lalu klik Pasangkan</b>
+      <p>Pilih nama alat Anda dari daftar dan klik <strong>Pasangkan</strong> (<em>Pair</em>). Menutup dialog atau menekan Batal akan membuat halaman tetap di mode simulasi.</p>
+    </div></li>
+    <li><div>
+      <b class="t">Pastikan koneksi berhasil</b>
+      <p>Tunggu beberapa detik. Koneksi berhasil jika muncul pemberitahuan “Perangkat tersambung.”, badge berubah menjadi <span class="ui ble">Bluetooth</span>, dan log menampilkan baris <code>GATT server tersambung.</code></p>
+    </div></li>
+  </ol>
+
+  <h3>Profil perangkat yang tersedia</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Profil</th><th>Kanal sensor</th><th>Sampling</th><th>Nama alat di dialog</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Smart Arrow Bow</strong><br>Panahan</td><td><span class="chip">IMU</span><span class="chip">Heart Rate</span><span class="chip">Pressure</span><span class="chip">Infrared</span></td><td class="num">200 Hz</td><td class="num">NS-BOW…</td></tr>
+        <tr><td><strong>IMU Wearable Band</strong><br>Lari / gait</td><td><span class="chip">IMU</span><span class="chip">Heart Rate</span></td><td class="num">100 Hz</td><td class="num">NS-BAND…</td></tr>
+        <tr><td><strong>Smart Suit</strong><br>16 titik IMU, seluruh tubuh</td><td><span class="chip">IMU</span><span class="chip">EMG</span></td><td class="num">50 Hz</td><td class="num">NS-SUIT…</td></tr>
+        <tr><td><strong>Smart Precision Pistol</strong><br>Menembak 10 m</td><td><span class="chip">IMU</span><span class="chip">Pressure</span></td><td class="num">200 Hz</td><td class="num">NS-PIS…</td></tr>
+        <tr><td><strong>HR Chest Strap</strong><br>Sabuk detak jantung</td><td><span class="chip">Heart Rate</span></td><td class="num">1 Hz</td><td class="num">Polar…</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Selain nama di atas, dialog juga menampilkan alat apa pun yang memiliki layanan detak jantung standar Bluetooth, misalnya sabuk dada atau jam olahraga dari merek lain. Untuk alat seperti ini, halaman hanya membaca <strong>detak jantung dan baterai</strong>. Grafik IMU tidak terisi.</p>
+
+  <h3>Memutuskan koneksi</h3>
+  <p>Klik <span class="ui red">Putuskan</span> untuk menghentikan pembacaan dan melepas alat. Pindah ke halaman lain di aplikasi juga otomatis memutuskan koneksi.</p>
+</section>
+
+<!-- 05 -->
+<section class="chapter" id="membaca">
+  <div class="ch-head">
+    <div class="ch-num">Bab 05</div>
+    <h2>Membaca data sensor</h2>
+    <p>Arti setiap angka di layar, satuannya, dan cara memeriksa apakah angkanya wajar.</p>
+  </div>
+
+  <figure class="w-md"><div class="shot"><img loading="lazy" src="/assets/img/panduan/imu.jpg" alt="Kartu IMU 9-sumbu dengan orientasi dan grafik akselerometer serta giroskop"></div><figcaption><b>GBR 5.1</b>Kartu IMU 9-Sumbu.</figcaption></figure>
+
+  <h3>Orientasi</h3>
+  <div class="defs">
+    <div class="def"><span class="u">ROLL · derajat</span><b>Miring ke samping</b><p>Rotasi pada sumbu depan–belakang, seperti memiringkan kepala ke bahu.</p></div>
+    <div class="def"><span class="u">PITCH · derajat</span><b>Mendongak / menunduk</b><p>Rotasi pada sumbu kiri–kanan, seperti mengangguk.</p></div>
+    <div class="def"><span class="u">YAW · 0–360°</span><b>Arah hadap</b><p>Rotasi pada sumbu vertikal, seperti menoleh. Nilai bisa bergeser perlahan seiring waktu.</p></div>
+  </div>
+
+  <h3>Grafik per sumbu</h3>
+  <p><strong>Akselerometer</strong> (<code>aX aY aZ</code>, satuan <strong>g</strong>) mengukur percepatan, termasuk gravitasi. <strong>Giroskop</strong> (<code>gX gY gZ</code>, satuan <strong>°/s</strong>) mengukur kecepatan putar. Setiap grafik menampilkan kira-kira 46 pembacaan terakhir, dan angka di kanannya adalah nilai terbaru.</p>
+  <div class="note">
+    <div><span class="lbl">Cek cepat</span><p>Letakkan alat diam di atas meja dengan posisi datar. Pembacaan yang sehat: <code>aZ</code> sekitar <strong>1.00 g</strong> karena gravitasi, <code>aX</code> dan <code>aY</code> mendekati <strong>0</strong>, dan ketiga nilai giroskop mendekati <strong>0 °/s</strong>. Jika jauh berbeda, lakukan <a href="#kalibrasi">kalibrasi nol</a>.</p></div>
+  </div>
+
+  <h3>Heart rate dan zona</h3>
+  <div class="pair">
+    <figure><div class="shot"><img loading="lazy" src="/assets/img/panduan/hr.jpg" alt="Kartu heart rate dengan cincin dan grafik tren"></div><figcaption><b>GBR 5.2</b>Kartu Heart Rate.</figcaption></figure>
+    <div class="prose" style="display:flex;flex-direction:column;gap:12px">
+      <p>Angka besar di tengah cincin adalah detak jantung terbaru dalam <strong>bpm</strong> (denyut per menit). Garis di bawahnya menunjukkan tren sekitar 44 pembacaan terakhir.</p>
+      <p>Warna cincin, badge, dan garis berubah mengikuti <strong>zona intensitas</strong> di bawah ini.</p>
+    </div>
+  </div>
+  <div class="zones">
+    <div class="zone" style="--c:#16a34a"><span class="z">ZONA 1</span><b>&lt; 100</b><span>Pemanasan, istirahat aktif</span></div>
+    <div class="zone" style="--c:#12c4a6"><span class="z">ZONA 2</span><b>100–129</b><span>Ringan, daya tahan dasar</span></div>
+    <div class="zone" style="--c:#f59e0b"><span class="z">ZONA 3</span><b>130–154</b><span>Sedang, aerobik</span></div>
+    <div class="zone" style="--c:#f97316"><span class="z">ZONA 4</span><b>155–171</b><span>Berat, ambang</span></div>
+    <div class="zone" style="--c:#e23b4e"><span class="z">ZONA 5</span><b>≥ 172</b><span>Maksimal, jangan lama</span></div>
+  </div>
+  <p>Batas zona ini sama untuk semua pengguna. Detak maksimal setiap orang berbeda menurut usia dan kebugaran, jadi jadikan zona sebagai panduan umum, bukan batas medis.</p>
+
+  <h3>Kualitas sinyal</h3>
+  <div class="pair">
+    <figure><div class="shot"><img loading="lazy" src="/assets/img/panduan/quality.jpg" alt="Kartu kualitas sinyal"></div><figcaption><b>GBR 5.3</b>Kartu Kualitas Sinyal.</figcaption></figure>
+    <div class="tbl-wrap" style="align-self:start">
+      <table style="min-width:0">
+        <tbody>
+          <tr><td><strong>Integritas paket</strong></td><td>Persentase paket yang sampai utuh. Idealnya di atas 98%.</td></tr>
+          <tr><td><strong>Paket hilang</strong></td><td>Jumlah paket yang tidak diterima, dihitung dari nomor urut. Jika terus naik, dekatkan alat.</td></tr>
+          <tr><td><strong>Kekuatan sinyal, stabilitas kalibrasi, latensi</strong></td><td>Angka <strong>perkiraan</strong> di versi ini, bukan hasil ukur langsung. Pakai integritas paket sebagai acuan utama.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3>Laju baca</h3>
+  <p><strong>Laju Baca</strong> (10, 25, atau 50 fps) mengatur seberapa sering layar diperbarui. Nilainya tidak mengubah kecepatan alat mengirim data. Pilih <strong>50 fps</strong> untuk grafik yang paling halus, atau <strong>10 fps</strong> di laptop atau ponsel yang lambat. Pada mode simulasi, satu pembaruan layar menghasilkan satu paket, sehingga angka <em>Sampling efektif</em> sama dengan laju baca.</p>
+
+  <h3>Membaca log paket mentah</h3>
+  <p>Log mencatat kejadian koneksi (tersambung, terputus, kalibrasi) dan cuplikan data <strong>setiap 12 paket</strong>. Log menyimpan 120 baris terakhir. Klik <span class="ui out">Bersihkan</span> untuk mengosongkannya.</p>
+  <div class="logline">
+<pre>[16.40.54] <span style="border-color:#8fa4d8">seq=00012</span>  <span style="border-color:#7f9dff">a[ 0.14 0.08 1.01 ]</span>  <span style="border-color:#3fd8bd">g[ 6.25 5.51 5.73 ]</span>  <span style="border-color:#ff7b8b">hr=110</span></pre>
+    <div class="logkey">
+      <span><i style="background:#8fa4d8"></i>nomor urut paket</span>
+      <span><i style="background:#7f9dff"></i>akselerometer X Y Z (g)</span>
+      <span><i style="background:#3fd8bd"></i>giroskop X Y Z (°/s)</span>
+      <span><i style="background:#ff7b8b"></i>detak jantung (bpm)</span>
+    </div>
+  </div>
+</section>
+
+<!-- 06 -->
+<section class="chapter" id="kalibrasi">
+  <div class="ch-head">
+    <div class="ch-num">Bab 06</div>
+    <h2>Kalibrasi nol</h2>
+    <p>Kalibrasi menjadikan posisi alat saat ini sebagai titik acuan. Tujuannya agar roll dan pitch terbaca 0° ketika alat berada di posisi awal latihan.</p>
+  </div>
+
+  <h3>Kapan perlu kalibrasi</h3>
+  <p>Lakukan kalibrasi <strong>di awal setiap sesi</strong>, setelah alat dipasang ulang ke tubuh atau peralatan, dan setiap kali roll atau pitch tidak mendekati 0 saat alat diam di posisi awal.</p>
+
+  <ol class="steps">
+    <li><div><b class="t">Pastikan pembacaan berjalan</b><p>Kalibrasi butuh data masuk. Jika tombol kendali menampilkan <strong>Lanjut Pembacaan</strong>, klik dulu. Tanpa data, muncul pesan “Mulai pembacaan dulu sebelum kalibrasi.”</p></div></li>
+    <li><div><b class="t">Tahan alat diam di posisi awal</b><p>Untuk band, berdiri tegak dengan lengan rileks. Untuk busur atau pistol, pegang di posisi siap membidik. Tahan tanpa bergerak sekitar dua detik.</p></div></li>
+    <li><div><b class="t">Klik Kalibrasi Nol</b><p>Klik <span class="ui out">Kalibrasi Nol</span> di kanan atas. Muncul pemberitahuan “Kalibrasi nol tersimpan.”, orientasi kembali ke 0°, dan grafik dimulai ulang.</p></div></li>
+  </ol>
+
+  <div class="note warn">
+    <div><span class="lbl">Perhatian</span><p>Hasil kalibrasi <strong>tidak disimpan</strong>. Kalibrasi akan hilang jika Anda pindah halaman, memuat ulang browser, atau menutup tab, jadi ulangi setiap kali membuka halaman ini.</p></div>
+  </div>
+</section>
+
+<!-- 07 -->
+<section class="chapter" id="merekam">
+  <div class="ch-head">
+    <div class="ch-num">Bab 07</div>
+    <h2>Merekam &amp; mengekspor</h2>
+    <p>Simpan data sensor dari satu sesi latihan menjadi file, agar bisa dibuka di Excel, Google Sheets, atau alat analisis lain.</p>
+  </div>
+
+  <ol class="steps">
+    <li><div><b class="t">Mulai merekam</b><p>Klik <span class="ui out">Rekam Sesi</span>. Tombol berubah menjadi <strong>Hentikan Rekam</strong>. Jika pembacaan sedang dijeda, halaman otomatis melanjutkannya.</p></div></li>
+    <li><div>
+      <b class="t">Lakukan gerakan latihan</b>
+      <p>Setiap pembaruan layar menambah satu sampel. Jumlah sampel dan durasi rekaman terlihat bertambah di kotak di bawah tombol.</p>
+      <figure class="w-sm"><div class="shot"><img loading="lazy" src="/assets/img/panduan/recording.jpg" alt="Kotak rekaman menunjukkan jumlah sampel dan durasi"></div><figcaption><b>GBR 7.1</b>Kotak rekaman saat merekam.</figcaption></figure>
+    </div></li>
+    <li><div><b class="t">Hentikan rekaman</b><p>Klik <strong>Hentikan Rekam</strong>. Muncul pemberitahuan berisi jumlah sampel yang tersimpan, misalnya “Rekaman selesai — 812 sampel.”</p></div></li>
+    <li><div><b class="t">Unduh file</b><p>Klik <span class="ui out">CSV</span> untuk spreadsheet, atau <span class="ui out">JSON</span> untuk diolah program. Nama file mengikuti pola <code>novasport-&lt;profil&gt;-&lt;waktu&gt;.csv</code>, misalnya <code>novasport-band-1789456120000.csv</code>.</p></div></li>
+  </ol>
+
+  <div class="note crit">
+    <div><span class="lbl">Jangan sampai hilang</span><p>Rekaman hanya tersimpan sementara di browser. Rekaman <strong>akan hilang</strong> jika Anda pindah halaman, memuat ulang, atau menutup tab. Rekaman juga <strong>tertimpa</strong> saat Anda menekan Rekam Sesi lagi. Unduh CSV atau JSON sebelum melakukan hal-hal tersebut.</p></div>
+  </div>
+
+  <h3>Isi file CSV</h3>
+  <p>Satu baris mewakili satu sampel, dengan 14 kolom:</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Kolom</th><th>Isi</th><th>Satuan</th></tr></thead>
+      <tbody>
+        <tr><td class="num">t</td><td>Waktu sejak rekaman dimulai</td><td class="num">milidetik</td></tr>
+        <tr><td class="num">ax, ay, az</td><td>Akselerometer sumbu X, Y, Z (nilai asli, belum dikurangi kalibrasi)</td><td class="num">g</td></tr>
+        <tr><td class="num">gx, gy, gz</td><td>Giroskop sumbu X, Y, Z (nilai asli)</td><td class="num">°/s</td></tr>
+        <tr><td class="num">mx, my, mz</td><td>Magnetometer sumbu X, Y, Z</td><td class="num">µT</td></tr>
+        <tr><td class="num">roll, pitch, yaw</td><td>Orientasi setelah kalibrasi, seperti yang tampil di layar</td><td class="num">derajat</td></tr>
+        <tr><td class="num">hr</td><td>Detak jantung saat sampel diambil</td><td class="num">bpm</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Isi file JSON</h3>
+  <p>File JSON berisi sampel yang sama, ditambah keterangan sesi di bagian atas:</p>
+<pre class="code">{
+  "device": "IMU Wearable Band",
+  "profile": "band",
+  "source": "ble",          <span class="c">// "ble" = alat nyata, "sim" = simulasi</span>
+  "samplingHz": 100,
+  "recordedAt": "2026-09-15T08:12:40.000Z",
+  "packets": 4212,
+  "dropped": 3,
+  "samples": [ { "t": 0, "ax": 0.03, "ay": 0.11, "az": 1.05, … "hr": 118 }, … ]
+}</pre>
+  <p>Periksa kolom <code>source</code> sebelum menganalisis. Rekaman berisi <code>"sim"</code> adalah data contoh, bukan hasil latihan.</p>
+</section>
+
+<!-- 08 -->
+<section class="chapter" id="masalah">
+  <div class="ch-head">
+    <div class="ch-num">Bab 08</div>
+    <h2>Pemecahan masalah</h2>
+    <p>Klik salah satu masalah untuk melihat penyebab dan solusinya.</p>
+  </div>
+
+  <div class="faq">
+    <details open><summary>Muncul “Web Bluetooth tidak tersedia — memakai mode simulasi.”</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Browser tidak mendukung Bluetooth, misalnya Safari atau Firefox, atau halaman tidak dibuka lewat HTTPS.</dd><dt>Solusi</dt><dd>Buka <code>https://nova-sport-id.web.app/app</code> di Google Chrome atau Microsoft Edge pada laptop, atau Chrome di Android.</dd></dl></details>
+    <details><summary>Alat tidak muncul di dialog pairing</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Profil yang dipilih tidak sesuai dengan alat, Bluetooth laptop mati, alat mati atau terlalu jauh, atau alat masih tersambung ke aplikasi lain.</dd><dt>Solusi</dt><dd>Pilih profil yang benar (Bab 04), nyalakan Bluetooth, dekatkan alat, lalu putuskan alat dari aplikasi lain dan coba lagi.</dd></dl></details>
+    <details><summary>Muncul “Gagal menghubungkan perangkat.”</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Koneksi terputus saat proses pairing, biasanya karena sinyal lemah atau alat masuk mode hemat daya.</dd><dt>Solusi</dt><dd>Nyalakan ulang alat, dekatkan ke laptop, lalu klik Hubungkan Perangkat lagi. Lihat pesan galat lengkap di log paket mentah.</dd></dl></details>
+    <details><summary>Log: “Service IMU NovaSport tidak ditemukan — hanya kanal standar.”</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Alat tersambung, tetapi tidak mengirim data IMU. Ini normal untuk sabuk detak jantung atau jam olahraga dari merek lain.</dd><dt>Solusi</dt><dd>Tidak perlu tindakan. Detak jantung dan baterai tetap terbaca. Untuk data gerak, gunakan alat NovaSport.</dd></dl></details>
+    <details><summary>Grafik tetap bergerak, tetapi alat sedang dimatikan atau dilepas</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Halaman sedang di <strong>mode simulasi</strong>, karena alat belum pernah tersambung atau sudah terputus.</dd><dt>Solusi</dt><dd>Lihat badge sumber data. Jika tertulis <em>Simulasi</em>, sambungkan ulang alat lewat Bab 04.</dd></dl></details>
+    <details><summary>Grafik diam dan badge IMU bertuliskan “Jeda”</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Pembacaan sedang dijeda.</dd><dt>Solusi</dt><dd>Klik <strong>Lanjut Pembacaan</strong>.</dd></dl></details>
+    <details><summary>Roll atau pitch tidak nol saat alat diam</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Belum dikalibrasi, atau posisi pasang alat berubah.</dd><dt>Solusi</dt><dd>Lakukan kalibrasi nol (Bab 06).</dd></dl></details>
+    <details><summary>Angka “Paket hilang” terus naik</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Jarak terlalu jauh, ada penghalang seperti tubuh atau dinding, atau banyak alat Bluetooth lain di sekitar.</dd><dt>Solusi</dt><dd>Dekatkan laptop ke atlet dan jauhkan dari sumber gangguan. Periksa apakah integritas paket kembali ke atas 98%.</dd></dl></details>
+    <details><summary>Muncul “Belum ada sampel — rekam sesi dulu.” saat mengunduh</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Belum ada rekaman, atau rekaman hilang karena halaman sempat ditinggalkan.</dd><dt>Solusi</dt><dd>Klik Rekam Sesi, lakukan gerakan, klik Hentikan Rekam, lalu unduh.</dd></dl></details>
+    <details><summary>Menu Pembacaan Sensor tidak ada</summary>
+      <dl class="ans"><dt>Penyebab</dt><dd>Anda masuk dengan peran selain Siswa atau Guru, atau browser masih memakai versi lama aplikasi.</dd><dt>Solusi</dt><dd>Masuk sebagai Siswa / Atlet atau Guru / Pelatih. Jika menu tetap tidak ada, tekan <code>Ctrl + Shift + R</code> untuk memuat ulang tanpa cache.</dd></dl></details>
+  </div>
+</section>
+
+<!-- 09 -->
+<section class="chapter" id="teknis">
+  <div class="ch-head">
+    <div class="ch-num">Bab 09 · Lampiran</div>
+    <h2>Lampiran teknis</h2>
+    <p>Untuk tim hardware dan firmware. Agar alat bisa dibaca halaman ini, firmware ESP32 / nRF52 harus mengikuti kontrak Bluetooth LE di bawah.</p>
+  </div>
+
+  <h3>Layanan GATT</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Layanan</th><th>UUID layanan</th><th>Karakteristik</th><th>Akses</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Heart Rate</strong></td><td class="num">0x180D</td><td class="num">0x2A37 heart_rate_measurement</td><td>notify</td></tr>
+        <tr><td><strong>Battery</strong></td><td class="num">0x180F</td><td class="num">0x2A19 battery_level</td><td>read, notify (opsional)</td></tr>
+        <tr><td><strong>NovaSport IMU</strong></td><td class="num">6e400001-b5a3-f393-<br>e0a9-e50e24dcca9e</td><td class="num">6e400003-b5a3-f393-<br>e0a9-e50e24dcca9e</td><td>notify</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Nama alat yang diiklankan harus diawali prefiks profilnya (<code>NS-BOW</code>, <code>NS-BAND</code>, <code>NS-SUIT</code>, <code>NS-PIS</code>) agar muncul di dialog pairing. UUID layanan IMU saat ini masih <strong>sementara</strong> dan akan disesuaikan dengan firmware final di <code>views/wearable-read.js</code>.</p>
+
+  <h3>Format frame IMU (20 byte)</h3>
+  <p>Setiap notifikasi berisi satu frame: sembilan nilai <code>int16</code> ditambah satu <code>uint16</code> nomor urut, semuanya <strong>little-endian</strong>.</p>
+  <div class="bytemap">
+    <div class="bytes">
+      <div class="field f-a"><b>aX</b><span>int16</span></div>
+      <div class="field f-a"><b>aY</b><span>int16</span></div>
+      <div class="field f-a"><b>aZ</b><span>int16</span></div>
+      <div class="field f-g"><b>gX</b><span>int16</span></div>
+      <div class="field f-g"><b>gY</b><span>int16</span></div>
+      <div class="field f-g"><b>gZ</b><span>int16</span></div>
+      <div class="field f-m"><b>mX</b><span>int16</span></div>
+      <div class="field f-m"><b>mY</b><span>int16</span></div>
+      <div class="field f-m"><b>mZ</b><span>int16</span></div>
+      <div class="field f-s"><b>seq</b><span>uint16</span></div>
+    </div>
+    <div class="ruler" aria-hidden="true">
+      <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span><span>14</span><span>15</span><span>16</span><span>17</span><span>18</span><span>19</span>
+    </div>
+  </div>
+  <div class="bm-legend">
+    <span class="f-a"><i></i>Akselerometer</span>
+    <span class="f-g"><i></i>Giroskop</span>
+    <span class="f-m"><i></i>Magnetometer</span>
+    <span class="f-s"><i></i>Nomor urut (opsional; frame minimal 18 byte)</span>
+  </div>
+
+  <h3>Skala konversi</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Sensor</th><th>Rentang</th><th>Nilai fisik =</th><th>Contoh</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Akselerometer</strong></td><td class="num">±16 g</td><td class="num">raw ÷ 2048</td><td class="num">2048 → 1.00 g</td></tr>
+        <tr><td><strong>Giroskop</strong></td><td class="num">±2000 °/s</td><td class="num">raw ÷ 16.4</td><td class="num">164 → 10.0 °/s</td></tr>
+        <tr><td><strong>Magnetometer</strong></td><td class="num">µT</td><td class="num">raw ÷ 10</td><td class="num">412 → 41.2 µT</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Paket hilang dihitung dari selisih <code>seq</code> antar-frame (dengan wrap-around di 65536). Selisih lebih dari 1 berarti ada paket yang tidak sampai.</p>
+
+  <h3>Heart Rate Measurement (0x2A37)</h3>
+<pre class="code"><span class="c">byte 0      flags — bit 0 menentukan format nilai</span>
+<span class="c">            bit0 = 0 → byte 1 berisi bpm (uint8)</span>
+<span class="c">            bit0 = 1 → byte 1–2 berisi bpm (uint16, little-endian)</span>
+
+contoh  06 76        → flags 0x06, bpm = 0x76 = 118
+contoh  07 76 00     → flags 0x07, bpm = 0x0076 = 118</pre>
+</section>
+
+<!-- 10 -->
+<section class="chapter" id="kode">
+  <div class="ch-head">
+    <div class="ch-num">Bab 10 · Untuk pengembang</div>
+    <h2>Dokumentasi kode</h2>
+    <p>Susunan berkas, keadaan (<em>state</em>) yang disimpan, dan alur kerja setiap fungsi di halaman Pembacaan Sensor. Ditulis untuk pengembang yang akan memelihara atau memperluas fitur ini.</p>
+  </div>
+
+  <h3>Berkas yang terlibat</h3>
+  <p>Seluruh fitur ditulis dengan JavaScript ES module tanpa framework dan tanpa proses <em>build</em>. Berkas dilayani apa adanya oleh Firebase Hosting.</p>
+<pre class="code">public/
+├── assets/js/views/<b>wearable-read.js</b>   <span class="c">← seluruh fitur (view + mount)</span>
+├── assets/js/<b>app.js</b>                    <span class="c">← route /pembacaan + menu samping</span>
+├── assets/js/views/extra.js            <span class="c">← tombol "Baca Live" di Perangkat Saya</span>
+├── assets/js/charts.js                 <span class="c">← donut(), sparkline(), gaugeRow()</span>
+├── assets/js/ui.js                     <span class="c">← toast()</span>
+├── assets/js/views/components.js       <span class="c">← pageHead()</span>
+└── assets/css/app.css                  <span class="c">← .wr-layout, .wr-spark, .wr-log</span></pre>
+
+  <h3>Dua fungsi yang diekspor</h3>
+  <p>Berkas <code>wearable-read.js</code> mengikuti pola yang dipakai semua halaman NovaSport: satu fungsi menghasilkan HTML, satu fungsi menghidupkannya.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Fungsi</th><th>Mengembalikan</th><th>Tugas</th></tr></thead>
+      <tbody>
+        <tr><td class="num">wearableReadView()</td><td>String HTML</td><td>Menyusun seluruh markup halaman. Murni, tanpa efek samping, dan tidak menyentuh DOM.</td></tr>
+        <tr><td class="num">mountWearableRead()</td><td>Fungsi <em>cleanup</em></td><td>Memasang <em>event listener</em>, menjalankan loop render, dan menangani Bluetooth. Nilai kembaliannya dipanggil router saat pengguna meninggalkan halaman.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Cara route dipasang</h3>
+  <p>Di <code>app.js</code>, setiap route memetakan path ke pasangan <code>r</code> (render) dan <code>m</code> (mount). Router memanggil <code>cleanup()</code> dari halaman sebelumnya, lalu mengisi <code>#app</code>, lalu memanggil mount.</p>
+<pre class="code"><span class="c">// app.js — tabel route</span>
+"/pembacaan": { r: wearableReadView, m: mountWearableRead },
+
+<span class="c">// app.js — inti router</span>
+if (cleanup) { cleanup(); cleanup = null; }
+app.innerHTML = route.r(user);
+if (route.m) cleanup = route.m(user) || null;</pre>
+  <div class="note">
+    <div><span class="lbl">Kenapa penting</span><p>Karena halaman ini menjalankan <code>setInterval</code> dan berlangganan notifikasi Bluetooth, <strong>cleanup wajib ada</strong>. Tanpa itu, loop tetap berjalan setelah pengguna pindah halaman dan alat tidak pernah dilepas.</p></div>
+  </div>
+
+  <h3>Objek state</h3>
+  <p>Seluruh keadaan halaman disimpan dalam satu objek <code>st</code> di dalam <code>mountWearableRead()</code>. Objek ini hidup dalam <em>closure</em>, bukan variabel global, sehingga otomatis hilang saat halaman ditinggalkan.</p>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Kelompok</th><th>Properti</th><th>Isi</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Pilihan pengguna</strong></td><td class="num">profile, rate</td><td>Profil perangkat aktif, dan laju render dalam fps (10 / 25 / 50).</td></tr>
+        <tr><td><strong>Status jalan</strong></td><td class="num">streaming, recording, source, timer</td><td>Sedang membaca atau dijeda, sedang merekam atau tidak, sumber data (<code>"ble"</code> atau <code>"sim"</code>), dan id interval.</td></tr>
+        <tr><td><strong>Koneksi</strong></td><td class="num">device, chars</td><td>Objek <code>BluetoothDevice</code> dan daftar karakteristik yang dilanggan, dipakai saat cleanup.</td></tr>
+        <tr><td><strong>Hitungan</strong></td><td class="num">packets, dropped, hz, hzWindow</td><td>Jumlah paket, paket hilang, laju paket per detik, dan jendela waktu untuk menghitungnya.</td></tr>
+        <tr><td><strong>Nilai sensor</strong></td><td class="num">last, orient, bias, battery, hr</td><td>Frame terakhir, orientasi hasil filter, bias kalibrasi, baterai, dan detak jantung.</td></tr>
+        <tr><td><strong>Riwayat grafik</strong></td><td class="num">hist, hrHist</td><td>Enam larik sumbu (maksimal 46 nilai) dan larik detak jantung (maksimal 44 nilai).</td></tr>
+        <tr><td><strong>Rekaman</strong></td><td class="num">samples, t0</td><td>Buffer sampel dan waktu mulai rekaman.</td></tr>
+        <tr><td><strong>Simulasi</strong></td><td class="num">phase</td><td>Penghitung fase gelombang untuk generator sinyal tiruan.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Alur sejak halaman dibuka</h3>
+  <ol class="steps">
+    <li><div><b class="t">Router memanggil view lalu mount</b><p><code>wearableReadView()</code> menghasilkan markup, router memasangnya ke <code>#app</code>, lalu <code>mountWearableRead()</code> dijalankan.</p></div></li>
+    <li><div><b class="t">Mount memasang listener dan langsung menyalakan simulasi</b><p>Semua tombol dipasangi listener, lalu <code>setSource("sim", …)</code> dan <code>startStream()</code> dipanggil agar halaman tidak tampak mati.</p></div></li>
+    <li><div><b class="t">Loop render berjalan</b><p><code>setInterval(tick, 1000 / st.rate)</code>. Dalam mode simulasi, <code>tick()</code> membuat frame sendiri; dalam mode Bluetooth, <code>tick()</code> hanya menggambar frame terakhir yang datang dari notifikasi.</p></div></li>
+    <li><div><b class="t">Cleanup saat pindah halaman</b><p>Interval dihentikan, semua <code>stopNotifications()</code> dipanggil, lalu koneksi GATT diputus.</p></div></li>
+  </ol>
+<h3>Diagram alur: siklus hidup halaman</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 720 712" role="img" aria-label="Diagram alur siklus hidup halaman Pembacaan Sensor, dari router memanggil view sampai cleanup saat pindah halaman">
+      <defs>
+        <marker id="ar1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--rule-2)"/>
+        </marker>
+      </defs>
+      <g class="ln" marker-end="url(#ar1)">
+        <path d="M360,60 V82"/>
+        <path d="M360,132 V154"/>
+        <path d="M360,204 V226"/>
+        <path d="M360,276 V296"/>
+        <path d="M240,340 H120 V408"/>
+        <path d="M480,340 H600 V408"/>
+        <path d="M120,466 V524 H208"/>
+        <path d="M600,466 V524 H512"/>
+        <path d="M360,548 V570"/>
+        <path d="M510,594 H690 V252 H512"/>
+        <path d="M360,618 V638"/>
+      </g>
+
+      <g class="node">
+        <rect x="210" y="12" width="300" height="48" rx="10"/>
+        <text x="360" y="32">Pengguna membuka #/pembacaan</text>
+        <text x="360" y="49" class="sm">router memanggil wearableReadView()</text>
+
+        <rect x="210" y="84" width="300" height="48" rx="10"/>
+        <text x="360" y="104">mountWearableRead()</text>
+        <text x="360" y="121" class="sm">memasang listener seluruh tombol</text>
+
+        <rect x="210" y="156" width="300" height="48" rx="10"/>
+        <text x="360" y="176">setSource("sim") + startStream()</text>
+        <text x="360" y="193" class="sm">halaman langsung hidup tanpa alat</text>
+      </g>
+
+      <g class="node accent">
+        <rect x="210" y="228" width="300" height="48" rx="10"/>
+        <text x="360" y="248">setInterval(tick, 1000 ÷ laju)</text>
+        <text x="360" y="265" class="sm">10, 25, atau 50 kali per detik</text>
+      </g>
+
+      <g class="dec">
+        <path d="M360,298 L480,340 L360,382 L240,340 Z"/>
+        <text x="360" y="345">sumber = Bluetooth?</text>
+      </g>
+      <text x="168" y="332" class="lbl">tidak</text>
+      <text x="520" y="332" class="lbl">ya</text>
+
+      <g class="node alt">
+        <rect x="30" y="408" width="180" height="58" rx="10"/>
+        <text x="120" y="431">simulateFrame()</text>
+        <text x="120" y="451">simulateHr()</text>
+
+        <rect x="510" y="408" width="180" height="58" rx="10"/>
+        <text x="600" y="431">frame terakhir dari</text>
+        <text x="600" y="451">notifikasi GATT</text>
+      </g>
+
+      <g class="node">
+        <rect x="210" y="500" width="300" height="48" rx="10"/>
+        <text x="360" y="520">applyFrame()</text>
+        <text x="360" y="537" class="sm">orientasi + tambah sampel bila merekam</text>
+
+        <rect x="210" y="570" width="300" height="48" rx="10"/>
+        <text x="360" y="590">render()</text>
+        <text x="360" y="607" class="sm">tulis angka, sparkline, dan log ke DOM</text>
+      </g>
+      <text x="654" y="430" class="lbl">ulangi</text>
+
+      <g class="node end">
+        <rect x="210" y="638" width="300" height="52" rx="10"/>
+        <text x="360" y="659">Pengguna pindah halaman</text>
+        <text x="360" y="677" class="sm">cleanup(): clearInterval, stopNotifications, disconnect</text>
+      </g>
+    </svg>
+    <figcaption><b>GBR 10.1</b>Satu putaran loop render. Pada mode Bluetooth, data masuk lewat notifikasi GATT di luar loop; loop hanya menggambar frame terakhir.</figcaption>
+  </figure>
+
+<pre class="code"><span class="c">// pola cleanup di akhir mountWearableRead()</span>
+return () => {
+  clearInterval(st.timer);
+  st.chars.forEach((c) =&gt; { try { c.stopNotifications(); } catch { <span class="c">/* perangkat sudah lepas */</span> } });
+  if (st.device &amp;&amp; st.device.gatt.connected) { try { st.device.gatt.disconnect(); } catch {} }
+};</pre>
+
+  <h3>Peta fungsi</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Fungsi</th><th>Tugas</th><th>Dipanggil oleh</th></tr></thead>
+      <tbody>
+        <tr><td class="num">connect()</td><td>Membuka dialog pairing, menyambung GATT, lalu berlangganan tiga layanan. Setiap kegagalan jatuh kembali ke simulasi.</td><td>Tombol Hubungkan</td></tr>
+        <tr><td class="num">subscribeHeartRate()<br>readBattery()<br>subscribeImu()</td><td>Masing-masing berlangganan satu layanan GATT. Ketiganya dibungkus <code>try/catch</code> sendiri, sehingga alat yang hanya punya sebagian layanan tetap bisa dipakai.</td><td class="num">connect()</td></tr>
+        <tr><td class="num">decodeHeartRate()<br>decodeImuFrame()</td><td>Menerjemahkan <code>DataView</code> mentah menjadi angka bersatuan.</td><td>Notifikasi GATT</td></tr>
+        <tr><td class="num">applyFrame()</td><td>Menyimpan frame, menghitung orientasi, dan menambah sampel bila sedang merekam.</td><td class="num">tick(), notifikasi IMU</td></tr>
+        <tr><td class="num">markPacket()</td><td>Mencatat waktu kedatangan paket untuk menghitung Hz.</td><td>Semua jalur penerimaan</td></tr>
+        <tr><td class="num">simulateFrame()<br>simulateHr()</td><td>Membangkitkan sinyal tiruan.</td><td class="num">tick()</td></tr>
+        <tr><td class="num">tick()</td><td>Satu putaran loop: ambil data (bila simulasi), lalu gambar.</td><td class="num">setInterval</td></tr>
+        <tr><td class="num">render()</td><td>Menulis seluruh angka dan grafik ke DOM.</td><td class="num">tick()</td></tr>
+        <tr><td class="num">startStream() / pauseStream()<br>toggleRecord() / calibrate()<br>disconnect()</td><td>Aksi tombol.</td><td>Listener tombol</td></tr>
+        <tr><td class="num">exportCsv() / exportJson()<br>download()</td><td>Menyusun berkas lalu mengunduhnya lewat <code>Blob</code> dan <code>URL.createObjectURL</code>.</td><td>Tombol CSV / JSON</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Pola penulisan yang dipakai</h3>
+  <div class="defs">
+    <div class="def"><span class="u">RENDER</span><b>String HTML, bukan DOM API</b><p>View disusun sebagai template literal, lalu bagian yang berubah diperbarui lewat <code>textContent</code> atau <code>innerHTML</code> per elemen ber-<code>id</code>.</p></div>
+    <div class="def"><span class="u">KEGAGALAN</span><b>Selalu ada jalan mundur</b><p>Setiap operasi Bluetooth dibungkus <code>try/catch</code>. Kegagalan apa pun berakhir di mode simulasi, bukan halaman kosong.</p></div>
+    <div class="def"><span class="u">DOM</span><b>Akses lewat penjaga <code>$(id)</code></b><p><code>render()</code> memeriksa keberadaan elemen sebelum menulis, sehingga notifikasi yang telat datang setelah cleanup tidak menimbulkan galat.</p></div>
+  </div>
+
+  <h3>Catatan CSS</h3>
+  <p>Tata letak tiga kolom memakai kelas <code>.wr-layout</code> di <code>app.css</code>, bukan <em>inline style</em>, karena <strong><em>inline style</em> tidak bisa ditimpa <em>media query</em></strong>. Kelas <code>.wr-spark</code> memberi <code>min-width: 0</code> pada wadah grafik; tanpa itu, SVG yang punya atribut <code>width</code> tetap menolak menyusut dan halaman meluber ke kanan.</p>
+</section>
+
+<!-- 11 -->
+<section class="chapter" id="algoritma">
+  <div class="ch-head">
+    <div class="ch-num">Bab 11 · Untuk pengembang</div>
+    <h2>Algoritma &amp; rumus</h2>
+    <p>Perhitungan yang dipakai halaman ini, lengkap dengan diagram alur, alasan pemilihannya, dan batas ketelitiannya.</p>
+  </div>
+
+<h3>Diagram alur: memilih sumber data</h3>
+  <p>Tiga titik keputusan menentukan apakah halaman membaca alat sungguhan atau kembali ke simulasi. Semuanya berakhir di keadaan yang bisa dipakai, tidak pernah di halaman kosong.</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 740 470" role="img" aria-label="Diagram alur pemilihan sumber data: tiga keputusan yang masing-masing bisa jatuh kembali ke mode simulasi">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--rule-2)"/>
+        </marker>
+      </defs>
+      <g class="ln" marker-end="url(#ar2)">
+        <path d="M300,58 V78"/>
+        <path d="M390,120 H540"/>
+        <path d="M300,162 V196"/>
+        <path d="M390,238 H540"/>
+        <path d="M300,280 V314"/>
+        <path d="M390,356 H540"/>
+        <path d="M300,398 V424"/>
+      </g>
+
+      <g class="node">
+        <rect x="180" y="10" width="240" height="48" rx="10"/>
+        <text x="300" y="30">Klik Hubungkan Perangkat</text>
+        <text x="300" y="47" class="sm">connect()</text>
+      </g>
+
+      <g class="dec">
+        <path d="M300,78 L390,120 L300,162 L210,120 Z"/>
+        <text x="300" y="118">Web Bluetooth</text>
+        <text x="300" y="133">tersedia?</text>
+      </g>
+      <g class="dec">
+        <path d="M300,196 L390,238 L300,280 L210,238 Z"/>
+        <text x="300" y="236">Pengguna memilih</text>
+        <text x="300" y="251">alat di dialog?</text>
+      </g>
+      <g class="dec">
+        <path d="M300,314 L390,356 L300,398 L210,356 Z"/>
+        <text x="300" y="354">GATT tersambung</text>
+        <text x="300" y="369">tanpa galat?</text>
+      </g>
+
+      <text x="410" y="112" class="lbl">tidak</text>
+      <text x="410" y="230" class="lbl">batal</text>
+      <text x="410" y="348" class="lbl">gagal</text>
+      <text x="312" y="188" class="lbl">ya</text>
+      <text x="312" y="306" class="lbl">ya</text>
+      <text x="312" y="418" class="lbl">ya</text>
+
+      <g class="node warn">
+        <rect x="540" y="96" width="190" height="48" rx="10"/>
+        <text x="635" y="117">Mode simulasi</text>
+        <text x="635" y="134" class="sm">badge oranye: Simulasi</text>
+
+        <rect x="540" y="214" width="190" height="48" rx="10"/>
+        <text x="635" y="235">Mode simulasi</text>
+        <text x="635" y="252" class="sm">pairing dibatalkan</text>
+
+        <rect x="540" y="332" width="190" height="48" rx="10"/>
+        <text x="635" y="353">Mode simulasi</text>
+        <text x="635" y="370" class="sm">galat dicatat di log</text>
+      </g>
+
+      <g class="node ok">
+        <rect x="140" y="424" width="320" height="42" rx="10"/>
+        <text x="300" y="450">Badge Bluetooth — langganan HR, baterai, IMU</text>
+      </g>
+    </svg>
+    <figcaption><b>GBR 11.1</b>Tiga jalan mundur menuju mode simulasi. Alat yang terputus di tengah sesi juga dikembalikan ke keadaan yang sama lewat <span class="mono">onDisconnected()</span>.</figcaption>
+  </figure>
+
+  <h3>1 · Membaca frame IMU</h3>
+  <p>Frame dibaca sebagai <code>DataView</code>. Setiap nilai diambil sebagai <code>int16</code> little-endian pada offset genap, lalu dibagi faktor skala sensornya (lihat <a href="#teknis">Bab 09</a>).</p>
+<pre class="code">const i16 = (o) =&gt; dv.getInt16(o, true);   <span class="c">// true = little-endian</span>
+
+ax: i16(0) / 2048,    <span class="c">// ±16 g   → g</span>
+gx: i16(6) / 16.4,    <span class="c">// ±2000 °/s → °/s</span>
+mx: i16(12) / 10,     <span class="c">// → µT</span>
+seq: dv.byteLength &gt;= 20 ? dv.getUint16(18, true) : null</pre>
+  <p>Frame yang lebih pendek dari 18 byte diabaikan. Nomor urut bersifat opsional: bila firmware hanya mengirim 18 byte, seluruh fitur tetap jalan kecuali penghitungan paket hilang.</p>
+
+  <h3>2 · Menghitung paket hilang</h3>
+  <p>Selisih nomor urut antara dua frame berurutan seharusnya 1. Karena <code>seq</code> adalah <code>uint16</code>, nilainya kembali ke 0 setelah 65535, sehingga selisih dihitung secara melingkar:</p>
+<pre class="code">const gap = (f.seq - st.last.seq + 65536) % 65536;
+if (gap &gt; 1) st.dropped += gap - 1;</pre>
+  <p>Penambahan 65536 sebelum modulo membuat rumus tetap benar saat terjadi <em>wrap-around</em>, misalnya dari 65534 ke 2 yang berarti dua paket hilang. Integritas paket kemudian dihitung sebagai <code>100 − (dropped ÷ packets) × 100</code>, dibulatkan dan dibatasi 0–100.</p>
+
+  <h3>3 · Laju paket (Hz) dengan jendela geser</h3>
+  <p>Angka <em>Sampling efektif</em> bukan rata-rata sejak awal, melainkan jumlah paket dalam <strong>satu detik terakhir</strong>. Setiap paket mencatat waktunya, lalu catatan yang lebih tua dari 1000 ms dibuang dari depan larik.</p>
+<pre class="code">const now = performance.now();
+st.hzWindow.push(now);
+while (st.hzWindow.length &amp;&amp; now - st.hzWindow[0] &gt; 1000) st.hzWindow.shift();
+st.hz = st.hzWindow.length;</pre>
+  <p><code>performance.now()</code> dipakai karena kebal terhadap perubahan jam sistem. Jendela geser membuat angka langsung turun ketika koneksi melemah, berbeda dengan rata-rata kumulatif yang bergerak lambat.</p>
+
+  <h3>4 · Orientasi dari akselerometer</h3>
+  <p>Saat alat relatif diam, percepatan yang terbaca didominasi gravitasi. Arah vektor gravitasi itu memberi kemiringan alat:</p>
+<pre class="code">roll  = atan2(ay, az) × 180/π
+pitch = atan2(−ax, √(ay² + az²)) × 180/π</pre>
+  <p>Hasil mentah ini berdenyut karena getaran, sehingga dihaluskan dengan <em>low-pass filter</em> eksponensial berbobot 0,85 pada nilai lama dan 0,15 pada nilai baru:</p>
+<pre class="code">st.orient.roll = st.orient.roll * 0.85 + roll * 0.15;</pre>
+  <p>Semakin besar bobot nilai lama, semakin halus grafiknya, tetapi semakin lambat responsnya terhadap gerakan cepat. Angka 0,85 dipilih sebagai kompromi untuk tampilan sekitar 25 fps.</p>
+  <p><strong>Yaw</strong> tidak bisa dihitung dari gravitasi, karena berputar pada sumbu yang sejajar gravitasi. Nilainya diperoleh dengan mengintegrasikan giroskop sumbu Z, lalu dijaga di rentang 0–360°:</p>
+<pre class="code">st.orient.yaw = (st.orient.yaw + (f.gz - st.bias.gz) * 0.02 + 360) % 360;</pre>
+  <div class="note warn">
+    <div><span class="lbl">Batas ketelitian</span><p>Yaw hasil integrasi <strong>melayang</strong> (<em>drift</em>) seiring waktu, karena galat kecil giroskop ikut terjumlahkan. Magnetometer sudah dibaca dan disimpan ke rekaman, tetapi <strong>belum dipakai</strong> untuk mengoreksi yaw. Roll dan pitch juga kurang tepat saat alat dipercepat kuat, karena gravitasi tidak lagi mendominasi. Untuk akurasi penuh, ganti dengan filter Madgwick atau Mahony yang memadukan ketiga sensor.</p></div>
+  </div>
+
+  <h3>5 · Kalibrasi nol</h3>
+  <p>Kalibrasi menyimpan pembacaan saat ini sebagai bias, lalu mengurangkannya dari setiap pembacaan berikutnya. Perhatikan perlakuan khusus sumbu Z:</p>
+<pre class="code">st.bias = {
+  ax: st.last.ax, ay: st.last.ay, <b>az: st.last.az - 1</b>,
+  gx: st.last.gx, gy: st.last.gy, gz: st.last.gz,
+};</pre>
+  <p>Angka 1 dikurangkan pada sumbu Z agar <strong>gravitasi tetap terbaca 1 g</strong> setelah kalibrasi. Jika seluruh sumbu dinolkan, <code>az</code> akan menjadi 0 dan rumus orientasi kehilangan acuan tegaknya.</p>
+  <p>Bias hanya memengaruhi tampilan dan kolom <code>roll</code>, <code>pitch</code>, <code>yaw</code>. Kolom sumbu mentah di berkas ekspor sengaja disimpan <strong>tanpa dikurangi bias</strong>, agar data asli tetap bisa dianalisis ulang.</p>
+
+  <h3>6 · Generator sinyal simulasi</h3>
+  <p>Mode simulasi tidak memakai angka acak murni, karena akan terlihat seperti derau dan tidak menyerupai gerak tubuh. Sinyal disusun dari tiga gelombang berbeda kecepatan ditambah sedikit derau:</p>
+  <div class="defs">
+    <div class="def"><span class="u">0,35 × fase</span><b>Napas</b><p>Gelombang paling lambat, meniru naik turun dada saat bernapas.</p></div>
+    <div class="def"><span class="u">0,9 × fase</span><b>Ayunan tubuh</b><p>Goyangan postur saat berdiri atau membidik.</p></div>
+    <div class="def"><span class="u">6,1 × fase</span><b>Tremor tangan</b><p>Getaran halus berfrekuensi tinggi.</p></div>
+  </div>
+<pre class="code">st.phase += 0.09;
+const breath = Math.sin(st.phase * 0.35);
+const tremor = Math.sin(st.phase * 6.1) * 0.06 + noise(0.05);
+const sway   = Math.sin(st.phase * 0.9) * 0.14;
+
+az: 1.0 + breath * 0.06 + noise(0.04)   <span class="c">// gravitasi + napas</span>
+
+if (Math.random() &lt; 0.004) { st.dropped++; return null; }   <span class="c">// paket hilang sesekali</span></pre>
+  <p>Peluang 0,004 per frame membuat sekitar satu dari 250 paket hilang, sehingga indikator integritas paket bergerak wajar seperti pada koneksi Bluetooth sungguhan. Detak jantung simulasi bergerak menuju sasaran yang berayun pelan, bukan melompat:</p>
+<pre class="code">const target = 96 + Math.sin(st.phase * 0.12) * 16;
+st.hr = st.hr + (target - st.hr) * 0.12 + noise(1.6);
+st.hr = clamp(st.hr, 52, 195);</pre>
+
+  <h3>7 · Riwayat grafik sebagai antrean</h3>
+  <p>Setiap sumbu menyimpan larik nilai yang dipotong dari depan setelah melewati batas. Pola ini menjaga penggunaan memori tetap tetap, berapa lama pun halaman dibiarkan terbuka.</p>
+<pre class="code">h.push(v);
+if (h.length &gt; 46) h.shift();     <span class="c">// 46 titik untuk grafik sumbu</span>
+if (hrHist.length &gt; 44) shift();  <span class="c">// 44 titik untuk heart rate</span></pre>
+  <p>Log paket memakai pendekatan yang sama pada DOM: setelah 120 baris, baris terlama dihapus dengan <code>removeChild(box.firstChild)</code>. Isi log juga hanya ditulis <strong>setiap 12 paket</strong> (<code>st.packets % 12 === 0</code>), karena menulis setiap paket pada 50 fps membuat log tidak terbaca sekaligus membebani browser.</p>
+
+  <h3>8 · Zona detak jantung</h3>
+<pre class="code">const zone = hr &lt; 100 ? 1 : hr &lt; 130 ? 2 : hr &lt; 155 ? 3 : hr &lt; 172 ? 4 : 5;</pre>
+  <p>Batas ini tetap untuk semua pengguna. Persentase cincin dihitung dengan memetakan 50–190 bpm ke 0–100%, yaitu <code>((hr − 50) ÷ 140) × 100</code>, lalu dibatasi agar tidak keluar rentang.</p>
+
+  <h3>9 · Mengunduh berkas tanpa server</h3>
+  <p>Ekspor berjalan sepenuhnya di browser. Isi berkas dibungkus <code>Blob</code>, diberi URL sementara, lalu diklik lewat elemen <code>&lt;a download&gt;</code> yang tidak pernah dimasukkan ke halaman.</p>
+<pre class="code">const url = URL.createObjectURL(new Blob([text], { type }));
+const a = document.createElement("a");
+a.href = url; a.download = name; a.click();
+setTimeout(() =&gt; URL.revokeObjectURL(url), 1000);</pre>
+  <p><code>revokeObjectURL</code> dipanggil setelah jeda singkat agar memori dilepas setelah unduhan dimulai. Nilai numerik pada CSV ditulis dengan <code>toFixed(4)</code> supaya lebar kolomnya seragam.</p>
+
+<h3>Ringkasan rumus</h3>
+  <p>Seluruh perhitungan yang dipakai halaman ini, dikumpulkan dalam satu tempat sebagai rujukan cepat.</p>
+
+  <div class="eqs">
+    <div class="eq">
+      <span class="u">Konversi nilai mentah sensor</span>
+      <div class="f">a = raw<sub>a</sub> ÷ 2048<span class="w">g</span></div>
+      <div class="f">ω = raw<sub>g</sub> ÷ 16,4<span class="w">°/s</span></div>
+      <div class="f">B = raw<sub>m</sub> ÷ 10<span class="w">µT</span></div>
+      <p>Pembagi berasal dari rentang sensor: ±16 g pada 16 bit, ±2000 °/s, dan magnetometer dalam sepersepuluh µT.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Orientasi dari vektor gravitasi</span>
+      <div class="f">roll = atan2(a<sub>y</sub>, a<sub>z</sub>) × 180 ÷ π</div>
+      <div class="f">pitch = atan2(−a<sub>x</sub>, √(a<sub>y</sub>² + a<sub>z</sub>²)) × 180 ÷ π</div>
+      <p>Berlaku saat alat relatif diam, sehingga percepatan yang terbaca didominasi gravitasi.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Penghalusan eksponensial <span class="mono">(low-pass)</span></span>
+      <div class="f">θ<sub>baru</sub> = 0,85 · θ<sub>lama</sub> + 0,15 · θ<sub>ukur</sub></div>
+      <p>Bentuk umumnya θ = (1−α)·θ<sub>lama</sub> + α·θ<sub>ukur</sub> dengan α = 0,15. Semakin kecil α, semakin halus tetapi semakin lambat responsnya.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Integrasi yaw</span>
+      <div class="f">yaw = (yaw + (ω<sub>z</sub> − bias<sub>z</sub>) × 0,02 + 360) mod 360</div>
+      <p>0,02 adalah perkiraan selang waktu antar-frame dalam detik. Penambahan 360 sebelum modulo menjaga hasil tetap positif saat berputar berlawanan arah.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Kalibrasi nol</span>
+      <div class="f">bias<sub>x</sub> = a<sub>x</sub> &nbsp;·&nbsp; bias<sub>y</sub> = a<sub>y</sub> &nbsp;·&nbsp; bias<sub>z</sub> = a<sub>z</sub> − 1</div>
+      <div class="f">nilai tampil = nilai baca − bias</div>
+      <p>Sumbu Z dikurangi 1 g agar gravitasi tetap terbaca setelah kalibrasi.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Paket hilang</span>
+      <div class="f">Δ = (seq<sub>baru</sub> − seq<sub>lama</sub> + 65536) mod 65536</div>
+      <div class="f">hilang += Δ − 1<span class="w">bila Δ &gt; 1</span></div>
+      <p>Modulo 65536 menangani <em>wrap-around</em> nomor urut 16 bit.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Integritas paket</span>
+      <div class="f">integritas = 100 − (hilang ÷ paket) × 100<span class="w">%</span></div>
+      <p>Dibulatkan lalu dibatasi pada rentang 0–100.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Laju paket dengan jendela geser</span>
+      <div class="f">Hz = jumlah paket dengan t<sub>sekarang</sub> − t<sub>paket</sub> ≤ 1000 ms</div>
+      <p>Bukan rata-rata kumulatif, sehingga angkanya langsung turun saat koneksi melemah.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Cincin detak jantung</span>
+      <div class="f">persen = ((hr − 50) ÷ 140) × 100<span class="w">%</span></div>
+      <div class="f">zona = 1 bila hr &lt; 100; 2 bila &lt; 130; 3 bila &lt; 155; 4 bila &lt; 172; selain itu 5</div>
+      <p>Rentang 50–190 bpm dipetakan ke 0–100% lalu dibatasi.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Generator sinyal simulasi</span>
+      <div class="f">fase ← fase + 0,09<span class="w">tiap frame</span></div>
+      <div class="f">napas = sin(0,35 · fase) &nbsp;·&nbsp; ayunan = sin(0,9 · fase) × 0,14</div>
+      <div class="f">tremor = sin(6,1 · fase) × 0,06 + derau(0,05)</div>
+      <div class="f">a<sub>z</sub> = 1,0 + napas × 0,06 + derau(0,04)</div>
+      <div class="f">hr ← hr + (target − hr) × 0,12 + derau(1,6)</div>
+      <p>derau(k) menghasilkan nilai acak seragam pada rentang −k/2 sampai +k/2. Target detak jantung sendiri berayun: 96 + sin(0,12 · fase) × 16.</p>
+    </div>
+
+    <div class="eq">
+      <span class="u">Selang loop render</span>
+      <div class="f">selang = 1000 ÷ laju<span class="w">ms</span></div>
+      <p>Laju 10, 25, atau 50 fps menghasilkan selang 100, 40, atau 20 ms.</p>
+    </div>
+  </div>
+
+  <h3>Yang masih bisa diperbaiki</h3>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr><th>Bagian</th><th>Keadaan sekarang</th><th>Arah perbaikan</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Yaw</strong></td><td>Integrasi giroskop saja, melayang seiring waktu.</td><td>Filter Madgwick atau Mahony dengan magnetometer.</td></tr>
+        <tr><td><strong>RSSI, latensi, stabilitas kalibrasi</strong></td><td>Angka perkiraan, bukan hasil ukur.</td><td>RSSI dari <code>watchAdvertisements()</code>, latensi dari selisih stempel waktu firmware.</td></tr>
+        <tr><td><strong>Rekaman</strong></td><td>Hanya di memori, hilang saat pindah halaman.</td><td>Simpan ke Firestore atau IndexedDB saat merekam.</td></tr>
+        <tr><td><strong>Kalibrasi</strong></td><td>Hilang setiap kali halaman dibuka ulang.</td><td>Simpan bias per perangkat di <code>localStorage</code> atau profil pengguna.</td></tr>
+        <tr><td><strong>Kanal pressure, infrared, EMG</strong></td><td>Tampil sebagai label kanal, belum ada pembacaannya.</td><td>Tambah karakteristik GATT dan dekoder seperti pola IMU.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<p class="endnote">NovaSport · Tim NovaSport UNS · Buku Panduan Pembacaan Alat Wearable v1.1</p>
+</main>
+</div>
+
+<script>
+(function () {
+  var BOXES = {"header":{"x":69.02901785714286,"y":10.547690225054996,"w":28.760097789115648,"h":3.2489142083591855},"stats":{"x":2.2108843537414966,"y":15.782052005189238,"w":95.578231292517,"h":13.948897286931016},"source":{"x":2.2108843537414966,"y":31.355406396299845,"w":25.510204081632654,"h":56.22285520897964},"controls":{"x":3.9965986394557826,"y":60.51807772576006,"w":21.93877551020408,"h":13.717637768627672},"record":{"x":3.9965986394557826,"y":75.49918213097186,"w":21.93877551020408,"h":10.18387951943144},"orient":{"x":31.037414965986393,"y":39.08285859326527,"w":36.224489795918366,"h":15.798973433357775},"axes":{"x":31.037414965986393,"y":56.32579389700491,"w":36.224489795918366,"h":13.170511591178297},"log":{"x":29.25170068027211,"y":73.01596254723898,"w":39.795918367346935,"h":24.63759941339049},"hr":{"x":70.578231292517,"y":31.355406396299845,"w":27.2108843537415,"h":23.932539906368095},"quality":{"x":70.578231292517,"y":56.91240340684753,"w":27.2108843537415,"h":25.049354165491565}};
+
+  /* annotated overview: pins + highlight boxes */
+  var stage = document.getElementById("stage");
+  var legend = document.getElementById("legend");
+  var items = legend.querySelectorAll("li");
+  var pins = {}, hls = {};
+  items.forEach(function (li) {
+    var k = li.getAttribute("data-k"), b = BOXES[k];
+    if (!b) return;
+    var hl = document.createElement("div");
+    hl.className = "hl";
+    hl.style.cssText = "left:" + b.x + "%;top:" + b.y + "%;width:" + b.w + "%;height:" + b.h + "%";
+    var pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "pin";
+    pin.textContent = li.querySelector(".k").textContent;
+    pin.setAttribute("aria-label", li.querySelector("b").textContent);
+    pin.style.left = b.x + "%";
+    pin.style.top = b.y + "%";
+    stage.appendChild(hl); stage.appendChild(pin);
+    pins[k] = pin; hls[k] = hl;
+    var on = function () { set(k, true); }, off = function () { set(k, false); };
+    [li, pin].forEach(function (el) {
+      el.addEventListener("mouseenter", on); el.addEventListener("mouseleave", off);
+    });
+    pin.addEventListener("focus", on); pin.addEventListener("blur", off);
+  });
+  function set(k, v) {
+    hls[k].classList.toggle("on", v); pins[k].classList.toggle("on", v);
+    legend.querySelector('[data-k="' + k + '"]').classList.toggle("on", v);
+  }
+
+  /* cover readout: static traces drawn once */
+  var axes = [["aX", "#7f9dff", 0.14], ["aY", "#3fd8bd", 0.08], ["aZ", "#a898ff", 1.01], ["gX", "#f5b547", 6.25], ["gY", "#ff7b8b", 5.51]];
+  var host = document.getElementById("coverAxes");
+  axes.forEach(function (a, i) {
+    var pts = [], y;
+    for (var x = 0; x <= 40; x++) {
+      y = 10 + Math.sin(x * (0.35 + i * 0.09) + i) * (4 + i) + Math.sin(x * 1.7 + i * 2) * 1.6;
+      pts.push((x * 5) + "," + y.toFixed(1));
+    }
+    host.insertAdjacentHTML("beforeend",
+      '<div class="axis"><span style="color:' + a[1] + '">' + a[0] + '</span>' +
+      '<svg viewBox="0 0 200 20" preserveAspectRatio="none"><polyline fill="none" stroke="' + a[1] + '" stroke-width="1.6" stroke-linejoin="round" points="' + pts.join(" ") + '"/></svg>' +
+      '<span>' + a[2].toFixed(2) + '</span></div>');
+  });
+
+  /* printing: expand every answer and load every image */
+  window.addEventListener("beforeprint", function () {
+    document.querySelectorAll(".faq details").forEach(function (d) { d.open = true; });
+    document.querySelectorAll("img[loading]").forEach(function (i) { i.loading = "eager"; });
+  });
+
+  /* table of contents: mark the chapter in view */
+  var links = document.querySelectorAll("#toc a");
+  if ("IntersectionObserver" in window) {
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (l) { l.classList.toggle("on", l.getAttribute("href") === "#" + e.target.id); });
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    document.querySelectorAll("section.chapter").forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>
