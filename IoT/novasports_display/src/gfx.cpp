@@ -325,42 +325,21 @@ void Canvas::darken(int x, int y, int w, int h, uint16_t k) {
 // (weights 9,3,3,1 / 16). Pixels are "spread" (G moved to the high half-word)
 // so the weighted sums run in one 32-bit add chain with room to spare.
 static inline uint32_t spread(uint16_t p) { return (p | ((uint32_t)p << 16)) & 0x07E0F81F; }
+// Nearest-neighbour 2x: the background is already a soft bokeh, so the old bilinear filter bought nothing
+// visible but cost half the frame time on the FPU-less C6. Each source pixel is written twice.
 void Canvas::upscale2x(const uint16_t* src, int sw, int sh, int sx) {
-  uint32_t v[W / 2 + 4];
-  int k0 = (sx >> 1) - 1;                                  // first source column needed
-  const int n = W / 2 + 3;
   for (int Y = cy0; Y < cy1; Y++) {
-    int sy = Y >> 1, ra = sy, rb = (Y & 1) ? sy + 1 : sy - 1;
-    if (rb < 0) rb = 0;
-    if (rb >= sh) rb = sh - 1;
-    if (ra >= sh) ra = sh - 1;
-    const uint16_t* A = src + ra * sw;                     // weight 3
-    const uint16_t* B = src + rb * sw;                     // weight 1
-    for (int i = 0; i < n; i++) {
-      int k = k0 + i;
-      if (k < 0) k = 0;
-      if (k >= sw) k = sw - 1;
-      uint32_t a3 = spread(A[k]);
-      v[i] = (a3 << 1) + a3 + spread(B[k]);                // vertical 3:1, weight sum 4
-    }
+    int sy = Y >> 1;
+    if (sy >= sh) sy = sh - 1;
+    const uint16_t* r = src + sy * sw;
     uint16_t* o = fb + Y * W;
-    int X = 0, k = ((sx) >> 1) - k0;                       // k: nearer source column of X = 0
-    if (sx & 1) {                                          // odd start: one right-hand sample first
-      uint32_t s = ((v[k] << 1) + v[k] + v[k + 1]) >> 4 & 0x07E0F81F;
-      o[X++] = (uint16_t)(s | (s >> 16));
-      k++;
+    int X = 0, k = sx >> 1;
+    if (sx & 1) { o[X++] = r[k < sw ? k : sw - 1]; k++; }
+    for (; X + 1 < W; X += 2, k++) {
+      uint32_t p = r[k < sw ? k : sw - 1];
+      *(uint32_t*)(o + X) = p | (p << 16);
     }
-    for (; X + 1 < W; X += 2, k++) {                       // even (left mix) + odd (right mix)
-      uint32_t c3 = (v[k] << 1) + v[k];
-      uint32_t e = (v[k - 1] + c3) >> 4 & 0x07E0F81F;
-      uint32_t d = (c3 + v[k + 1]) >> 4 & 0x07E0F81F;
-      o[X] = (uint16_t)(e | (e >> 16));
-      o[X + 1] = (uint16_t)(d | (d >> 16));
-    }
-    if (X < W) {
-      uint32_t e = (v[k - 1] + (v[k] << 1) + v[k]) >> 4 & 0x07E0F81F;
-      o[X] = (uint16_t)(e | (e >> 16));
-    }
+    if (X < W) o[X] = r[k < sw ? k : sw - 1];
   }
 }
 
@@ -400,6 +379,65 @@ void Canvas::glassShade(float x, float y, float w, float h, float r) {
     if (a < b && (b & 1)) { b--; p[b] = shade1(p[b]); }
     uint32_t* q = (uint32_t*)(p + a);
     for (int i = 0, n = (b - a) >> 1; i < n; i++) q[i] = shade2(q[i]);
+  }
+}
+
+// ---- glassCard: integer-only card (shade + 1 px outline). The float path above spent ~half the frame on the
+// ESP32-C6 (no FPU: sqrt per corner / edge pixel). Corner shape comes from a table built once.
+namespace {
+constexpr int GR = 11;                       // corner radius
+int gInset[GR], gFrac[GR];                  // px excluded at the row's left end, coverage (0..255) of the next px
+bool gInit = false;
+void glassInit() {
+  for (int i = 0; i < GR; i++) {
+    float dy = GR - (i + .5f);
+    float edge = GR - sqrtf((float)(GR * GR) - dy * dy);
+    int ex = (int)edge;
+    gInset[i] = ex; gFrac[i] = (int)((1.f - (edge - ex)) * 255.f);
+  }
+  gInit = true;
+}
+}  // namespace
+
+void Canvas::glassCard(int x, int y, int w, int h, uint8_t at, uint8_t ab) {
+  if (!gInit) glassInit();
+  int y0 = imax(y, cy0), y1 = imin(y + h, cy1);
+  for (int yy = y0; yy < y1; yy++) {
+    int ry = yy - y, dist = ry < GR ? ry : (h - 1 - ry < GR ? h - 1 - ry : GR);   // 0..GR (GR = straight)
+    uint16_t* p = fb + yy * W;
+    int a = x, b = x + w;
+    uint32_t al = (uint32_t)((int)at + ((int)ab - (int)at) * ry / h);
+    bool top = ry == 0 || ry == h - 1;
+    if (dist < GR) {
+      int ex = gInset[dist];
+      a = x + ex; b = x + w - ex;
+      // partial pixel at each end, shaded by coverage
+      int fx = gFrac[dist];
+      if (a - 1 >= cx0 && a - 1 < cx1 && a > x) { /* outside the card: nothing */ }
+      if (a >= cx0 && a < cx1) p[a] = blend(p[a], shade1(p[a]), (uint32_t)fx);
+      if (b - 1 >= cx0 && b - 1 < cx1) p[b - 1] = blend(p[b - 1], shade1(p[b - 1]), (uint32_t)fx);
+      a++; b--;
+    }
+    int sa = imax(a, cx0), sb = imin(b, cx1);
+    if (sa < sb) {
+      int i = sa, n = sb;
+      if ((i & 1) && i < n) { p[i] = shade1(p[i]); i++; }
+      if (((n & 1)) && i < n) { n--; p[n] = shade1(p[n]); }
+      uint32_t* q = (uint32_t*)(p + i);
+      for (int k = 0, m = (n - i) >> 1; k < m; k++) q[k] = shade2(q[k]);
+    }
+    // outline: ends of the row (corner rows widen toward the row above), whole row at the top / bottom edge
+    int la, lb, ra, rb;
+    if (dist < GR) {
+      int ex = gInset[dist];
+      int nxt = dist == 0 ? GR : (ry < GR ? gInset[dist - 1] : gInset[dist - 1]);   // inset of the row nearer the edge
+      int span = dist == 0 ? GR - ex : (nxt - ex > 0 ? nxt - ex : 1);
+      if (ry >= GR) { span = (dist == 0 ? GR - ex : (gInset[dist - 1] - ex > 0 ? gInset[dist - 1] - ex : 1)); }
+      la = x + ex; lb = la + span; rb = x + w - ex; ra = rb - span;
+    } else { la = x; lb = x + 1; ra = x + w - 1; rb = x + w; }
+    if (top) { la = x + gInset[0]; lb = x + w - gInset[0]; ra = rb = 0; }
+    for (int xx = imax(la, cx0); xx < imin(lb, cx1); xx++) p[xx] = blend(p[xx], 0xFFFF, al);
+    for (int xx = imax(ra, cx0); xx < imin(rb, cx1); xx++) p[xx] = blend(p[xx], 0xFFFF, al);
   }
 }
 

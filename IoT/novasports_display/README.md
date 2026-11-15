@@ -17,8 +17,8 @@ standar, dan cloud Firebase RTDB. Yang berbeda hanya lapisan board (layar, sentu
 | Baterai | ADC GPIO4, pembagi 1:2 | `BAT_ADC` GPIO0, pembagi 1:3 |
 | Link ke ESP32-C3 | GPIO12 | GPIO17 (pad `ESP_RXD`) |
 
-Tombol: tekan singkat BOOT/PWR = halaman berikutnya/sebelumnya · tahan BOOT = mulai/jeda lari ·
-tahan PWR = hentikan lari · tahan PWR 2 detik = matikan. Sapu kiri/kanan = ganti halaman, ketuk halaman RUN = mulai/jeda.
+Tombol: BOOT (GPIO9) tekan singkat = halaman berikutnya, tahan = halaman sebelumnya · PWR (GPIO18) tekan singkat = layar mati/hidup
+(ESP tetap menyala) · tahan PWR 2 detik = matikan (di baterai); untuk menyalakan lagi tahan PWR. Sapu kiri/kanan = ganti halaman, ketuk halaman RUN = mulai/jeda.
 
 ## Wiring sensor (semua I2C, satu bus)
 

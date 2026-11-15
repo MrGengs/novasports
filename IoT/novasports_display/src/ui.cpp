@@ -6,6 +6,15 @@
 #include <string.h>
 
 using namespace gfx;
+#ifdef ARDUINO
+#include <Arduino.h>
+uint32_t uiProf[8];
+#define PT(i, stmt) { uint32_t _t = micros(); stmt; uiProf[i] += micros() - _t; }
+#else
+uint32_t uiProf[8];
+static inline uint32_t micros() { return 0; }
+#define PT(i, stmt) stmt
+#endif
 
 namespace {
 const uint16_t WHITE = hex(0xFFFFFF), CREAM = hex(0xFFF3C4), ROSE = hex(0xC9B070),
@@ -28,7 +37,7 @@ inline uint8_t A8(float v) { return (uint8_t)(clamp01(v) * 255.f); }
 
 // deterministic bokeh specks: far (behind the cards) and near (in front of them)
 struct Speck { float x, y, r, v, a; uint16_t c; };
-Speck far_[18], near_[6];
+Speck far_[6], near_[3];
 
 void seedSpecks() {
   uint32_t s = 12345;
@@ -154,25 +163,24 @@ float Ui::intro(int idx) const {
 void Ui::render(Canvas& c) {
   c.noclip();                                               // (resets to the canvas band)
   if (bootT_ < BOOT_END - .5f) { drawBoot(c, bootT_, 255); return; }
-  drawWorld(c);
-  for (int i = 0; i < PAGES; i++) {
+  PT(0, drawWorld(c));
+  PT(1, for (int i = 0; i < PAGES; i++) {
     int ox = (int)lroundf((i - pageF_) * W);
     if (ox > -W && ox < W) drawPage(c, i, ox);
-  }
+  });
   // near specks: large, soft, fast — the out-of-focus foreground
   const bool still = pageF_ > 2.6f;                         // LINK page: no floating specks (too heavy for the C6)
-  if (!still) for (auto& p : near_) {
+  PT(2, if (!still) for (auto& p : near_) {
     float x = fmodf(p.x - pageF_ * 320 + t_ * p.v + 4800, 480) - 120;
     float y = p.y + sinf(t_ * .3f + p.x) * 6;
     c.glow(x, y, p.r, p.c, A8(p.a));
-  }
+  });
   if (alertT_ > 0) {                                        // pulsing red edge
     float k = .55f + .45f * sinf(alertT_ * 6.f);
     c.vgradient(0, 0, W, 22, RED, RED, A8(.55f * k), 0);
     c.vgradient(0, H - 22, W, 22, RED, RED, 0, A8(.55f * k));
   }
-  drawStatus(c);
-  drawToast(c);
+  PT(3, drawStatus(c); drawToast(c));
   if (bootT_ < BOOT_END) drawBoot(c, BOOT_END - .5f, A8(1 - easeInOut((bootT_ - (BOOT_END - .5f)) / .5f)));
 }
 
@@ -220,10 +228,12 @@ void Ui::drawWorld(Canvas& c) {
 }
 
 void Ui::glass(Canvas& c, float x, float y, float w, float h, int idx) {
+  uint32_t _g = micros();
+  struct G { uint32_t t; ~G() { uiProf[4] += micros() - t; } } _gg{_g};
   float e = intro(idx);
   y += (1 - e) * 18;
-  if (e > .995f) c.glassShade(x, y, w, h, 11);             // settled: the fast integer path
-  else c.rrect(x, y, w, h, 11, INK, A8(.62f * e));         // during the intro: fades in
+  if (e > .995f) { c.glassCard((int)x, (int)y, (int)w, (int)h, A8(.30f), A8(.05f)); return; }   // settled: integer path
+  c.rrect(x, y, w, h, 11, INK, A8(.62f * e));              // during the intro: fades in
   c.rrectStroke(x, y, w, h, 11, WHITE, A8(.30f * e), A8(.05f * e));
 }
 
@@ -247,6 +257,7 @@ void Ui::pageLive(Canvas& c, int ox) {
   glass(c, 178 + ox, 28, 92, 118, 0);
   glass(c, 10 + ox, 154, 260, 72, 1);
 
+  uint32_t _p0 = micros();
   // ---- heart rate
   c.text(fLabel_, "HEART RATE", 22 + ox, 45 + dy0, ROSE, A8(e0), 1);
   if (M_->demo) c.text(fLabel_, "DEMO", 38 + ox, 122 + dy0, AMBER, A8(.75f * e0), 1);
@@ -270,6 +281,7 @@ void Ui::pageLive(Canvas& c, int ox) {
   int tw = Canvas::textWidth(fLabel_, buf, 1);
   c.text(fLabel_, buf, 20 + ox + (140 - tw) / 2, 135 + dy0, WHITE, A8(e0), 1);
 
+  uiProf[5] += micros() - _p0; _p0 = micros();
   // ---- body temperature (MLX90614)
   c.text(fLabel_, "BODY TEMP", 188 + ox, 45 + dy0, ROSE, A8(e0), 1);
   bool tOk = M_->tempOk && m.temp > 0;
@@ -289,6 +301,7 @@ void Ui::pageLive(Canvas& c, int ox) {
   c.rrect(224.f + ox - (tw + 14) / 2.f, 114.f + dy0, (float)tw + 14, 18, 9, tcol, A8(.28f * e0));
   c.text(fLabel_, tst, 224 + ox - tw / 2, 127 + dy0, tcol == ROSE ? ROSE : WHITE, A8(e0), 1);
 
+  uiProf[6] += micros() - _p0; _p0 = micros();
   // ---- PPG wave
   c.text(fLabel_, "PPG  LIVE", 22 + ox, 171 + dy1, ROSE, A8(e1), 1);
   c.circle(160 + ox, 167 + dy1, 3, GREEN, A8((.55f + .45f * pulse) * e1));
@@ -305,11 +318,10 @@ void Ui::pageLive(Canvas& c, int ox) {
     float v = M_->ppg[(M_->ppgHead + N - ww + k) % N];
     ys[k] = wy + wh - 4 - (v - lo) / span * (wh - 8);
   }
-  c.wave(ys, ww, x0, 2.4f, PULSE, A8(.16f * e1), wy + wh, A8(.20f * e1));   // glow + fill
   c.wave(ys, ww, x0, .95f, PULSE, A8(e1), 0, 0);                            // the trace
   float px = (float)(x0 + ww - 1), py = ys[ww - 1];
-  c.glow(px, py, 9, PULSE, A8(.8f * e1));
   c.circle(px, py, 2.2f, WHITE, A8(e1));
+  uiProf[7] += micros() - _p0; _p0 = micros();
   // cadence + steps, stacked on the right
   c.sprite(A_->sprite(A::IC_FOOTSTEPS), 182 + ox, 162 + dy1, A8(e1));
   if (M_->real && !M_->cadOk) snprintf(buf, sizeof buf, "--"); else snprintf(buf, sizeof buf, "%d", (int)lroundf(m.cadence));

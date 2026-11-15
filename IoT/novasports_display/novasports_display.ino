@@ -69,11 +69,13 @@ static const int BAND = 60, BAND_N = gfx::H / BAND;
 static_assert(BAND * BAND_N == gfx::H, "bands must tile the panel");
 alignas(4) static uint16_t bandBuf[gfx::W * BAND];
 static gfx::Canvas canvas;
+extern uint32_t uiProf[8];
+static uint32_t profUi = 0, profTx = 0;   // us per stats window
 static Assets assets;
 static Model model;
 static Ui ui;
 static char devName[24];
-static int brightness = 220;
+static int brightness = 100;                    // ~40 %: saves battery (the app can still change it with the brightness command)
 
 struct Line { char s[256]; uint8_t src; };      // commands from BLE/USB, handled in loop()
 static QueueHandle_t cmdQ;
@@ -81,6 +83,7 @@ static BLECharacteristic *chTelem, *chWave, *chHr, *chBat;
 static volatile int bleClients = 0;
 static bool bleUp = false;                                  // bleInit() sudah jalan
 static volatile uint32_t advAt = 0;                        // millis() at which to restart advertising, 0 = none
+static bool screenOff = false;                  // PWR short press: backlight off, rendering paused, everything else keeps running
 static uint32_t usbSeenMs = 0;                  // last command over USB
 static bool usbStream = false;
 
@@ -490,12 +493,16 @@ void loop() {
   if (dt > .1f) dt = .1f;
 
   // input
-  touchPoll();
-  ui.touch(tdown, tlx, tly);
+  // PWR: short press = screen off / on (the ESP keeps running), hold 2 s = power off.  BOOT: next page (hold = previous).
+  if (!screenOff) { touchPoll(); ui.touch(tdown, tlx, tly); } else { tdown = false; ui.touch(false, 0, 0); }
   int e = bNext.poll();
-  if (e) ui.buttonNext(e == 2);
+  if (e) {
+    if (screenOff) screenOff = false;                         // any key wakes the screen
+    else if (e == 1) ui.buttonNext(false);
+    else ui.buttonPrev(false);
+  }
   e = bPrev.poll();
-  if (e) ui.buttonPrev(e == 2);
+  if (e == 1) screenOff = !screenOff;
   if (bPrev.down && millis() - bPrev.downAt >= POWER_HOLD_MS) powerOff();
 
   serialPoll();
@@ -549,15 +556,23 @@ void loop() {
   linkTick();
 
   // backlight eases in with the splash, then follows the brightness setting
-  int target = brightness;
+  int target = screenOff ? 0 : brightness;
   bl += (target - bl) / 6 + (target > bl ? 1 : target < bl ? -1 : 0);
   ledcWrite(PIN_BL, constrain(bl, 0, 255));
 
   uint32_t r0 = micros();
+  if (screenOff && bl == 0) { frames++; delay(30); return; }   // dark: skip drawing and SPI
   for (int b = 0; b < BAND_N; b++) {            // four bands: draw, ship over SPI, sample the touch panel in between
     canvas.band(bandBuf, b * BAND, (b + 1) * BAND);
+    uint32_t q0 = micros();
     ui.render(canvas);
-    panel->draw16bitRGBBitmap(0, b * BAND, bandBuf, gfx::W, BAND);
+    uint32_t q1 = micros();
+    {                                          // swap to big-endian once (32-bit ops), then one bulk SPI write
+      uint32_t* w = (uint32_t*)bandBuf;
+      for (int i = 0; i < gfx::W * BAND / 2; i++) { uint32_t v = w[i]; w[i] = ((v & 0x00FF00FFu) << 8) | ((v >> 8) & 0x00FF00FFu); }
+    }
+    panel->draw16bitBeRGBBitmap(0, b * BAND, bandBuf, gfx::W, BAND);
+    profUi += q1 - q0; profTx += micros() - q1;
     touchPoll();
   }
   renderMs += (micros() - r0) / 1000.f;
@@ -567,6 +582,10 @@ void loop() {
   if (millis() - statT >= 5000) {
     Serial.printf("# fps %.1f  render %.1f ms  worst frame %.0f ms  heap %u  ble %d  page %d\n", frames * 1000.f / (millis() - statT),
                   renderMs / frames, worstDt * 1000, (unsigned)ESP.getFreeHeap(), bleClients, ui.page());
+    Serial.printf("# prof ui %.1f ms  spi %.1f ms per frame | world %.1f pages %.1f specks %.1f chrome %.1f\n", profUi / 1000.f / frames, profTx / 1000.f / frames,
+                  uiProf[0] / 1000.f / frames, uiProf[1] / 1000.f / frames, uiProf[2] / 1000.f / frames, uiProf[3] / 1000.f / frames);
+    Serial.printf("# prof2 glass %.1f hr %.1f temp %.1f ppgwave %.1f\n", uiProf[4] / 1000.f / frames, uiProf[5] / 1000.f / frames, uiProf[6] / 1000.f / frames, uiProf[7] / 1000.f / frames);
+    profUi = profTx = 0; for (auto& v : uiProf) v = 0;
     worstDt = 0;
     statT = millis(); frames = 0; renderMs = 0;
   }

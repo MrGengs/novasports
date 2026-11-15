@@ -85,6 +85,7 @@ class Canvas {
   // --- fast paths (see gfx.cpp): these carry the per-frame load on the ESP32-S3
   void upscale2x(const uint16_t* src, int sw, int sh, int sx);                // half-res image -> full frame, bilinear
   void glassShade(float x, float y, float w, float h, float r);               // rounded rect darkened to 3/8 + ink
+  void glassCard(int x, int y, int w, int h, uint8_t at, uint8_t ab);        // integer card: shade + outline (r = 11)
   void wave(const float* ys, int n, int x0, float hw, uint16_t c, uint8_t a, int floorY, uint8_t fillA);
   void shadeTop(int h, uint16_t k0);                                          // darken the top h rows, fading out
 
