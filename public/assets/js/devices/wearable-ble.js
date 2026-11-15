@@ -22,6 +22,8 @@
 
 export const NS_BIO_SERVICE = "6e400010-b5a3-f393-e0a9-e50e24dcca9e";
 export const NS_BIO_CHAR = "6e400011-b5a3-f393-e0a9-e50e24dcca9e";
+const NS_BIO_CMD = "6e400012-b5a3-f393-e0a9-e50e24dcca9e";      // tulis JSON ke perangkat, mis. sinkron waktu
+const CTS_SERVICE = 0x1805, CTS_CHAR = 0x2a2b;                     // Current Time Service standar (cadangan)
 const PLX_SERVICE = 0x1822, PLX_CONT = 0x2a5f, PLX_SPOT = 0x2a5e, HR_SERVICE = 0x180d, HR_MEAS = 0x2a37, BAT_SERVICE = 0x180f, BAT_LEVEL = 0x2a19;
 const ACC_LSB = 8192, GYRO_LSB = 65.5;          // MPU6050/9250 pada ±4 g dan ±500 dps
 const NO_CONTACT_IR = 50000;                     // DC IR di bawah ini = jari/kulit tidak menempel
@@ -74,7 +76,7 @@ export class WearLink extends EventTarget {
     const device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "NOVA-BAND" }, { services: [NS_BIO_SERVICE] }, { services: [PLX_SERVICE] }, { services: [HR_SERVICE] }],
       exclusionFilters: [{ namePrefix: "MOTUS" }, { namePrefix: "Muse" }],   // busur & EEG punya tombol sendiri
-      optionalServices: [NS_BIO_SERVICE, PLX_SERVICE, HR_SERVICE, BAT_SERVICE],
+      optionalServices: [NS_BIO_SERVICE, PLX_SERVICE, HR_SERVICE, BAT_SERVICE, CTS_SERVICE],
     });
     this.device = device;
     this._onDisc = () => { if (!this._stopped) this._status("error", "Wearable terputus. Tekan Hubungkan lagi."); };
@@ -92,10 +94,33 @@ export class WearLink extends EventTarget {
     if (await sub(HR_SERVICE, HR_MEAS, (dv) => this._hrStd(dv))) got.push("Heart Rate 0x2A37");
     try { const b = await (await server.getPrimaryService(BAT_SERVICE)).getCharacteristic(BAT_LEVEL); this.v.battery = (await b.readValue()).getUint8(0); } catch { /* opsional */ }
     if (!got.length) throw new Error("Perangkat tidak menyediakan layanan NovaSport wearable, SpO₂ (0x1822), maupun Heart Rate (0x180D).");
+    await this._syncTime(server);
     this._startTick();
     this._status("live", `Terhubung · ${device.name || "wearable"}`);
     this._log("Layanan aktif: " + got.join(", "));
     return device.name || "wearable";
+  }
+
+  // Jam perangkat mengikuti jam HP/PC yang menyambung: JSON ke karakteristik perintah, atau Current Time standar.
+  async _syncTime(server) {
+    const d = new Date();
+    try {
+      const ch = await (await server.getPrimaryService(NS_BIO_SERVICE)).getCharacteristic(NS_BIO_CMD);
+      const msg = JSON.stringify({ cmd: "time", t: Math.floor(d.getTime() / 1000), tz: -d.getTimezoneOffset() });
+      await ch.writeValueWithoutResponse(new TextEncoder().encode(msg));
+      this._log("Jam wearable disinkronkan dengan jam perangkat ini.");
+      return true;
+    } catch { /* firmware lama: coba Current Time */ }
+    try {
+      const ch = await (await server.getPrimaryService(CTS_SERVICE)).getCharacteristic(CTS_CHAR);
+      const b = new DataView(new ArrayBuffer(10));
+      b.setUint16(0, d.getFullYear(), true); b.setUint8(2, d.getMonth() + 1); b.setUint8(3, d.getDate());
+      b.setUint8(4, d.getHours()); b.setUint8(5, d.getMinutes()); b.setUint8(6, d.getSeconds());
+      b.setUint8(7, d.getDay() || 7); b.setUint8(8, 0); b.setUint8(9, 1);
+      await ch.writeValue(b);
+      this._log("Jam wearable disinkronkan (Current Time).");
+      return true;
+    } catch { return false; }                                  // opsional, jangan menggagalkan koneksi
   }
 
   // ------------------------------------------------------------- dekoder paket

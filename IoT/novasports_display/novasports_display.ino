@@ -57,6 +57,7 @@ static const uint8_t TOUCH_ADDR = 0x15;
 // raw sensor packets, little-endian, first byte = TAG. All the maths (HR, HRV, SpO2, tremor ...) is done in the browser.
 #define NB_SVC   "6e400010-b5a3-f393-e0a9-e50e24dcca9e"
 #define NB_DATA  "6e400011-b5a3-f393-e0a9-e50e24dcca9e"
+#define NB_CMD   "6e400012-b5a3-f393-e0a9-e50e24dcca9e"   // write a JSON line, e.g. {"cmd":"time","t":<unix s>,"tz":<min east of UTC>}
 #define TAG_PPG  0x01
 #define TAG_IMU  0x02
 #define TAG_TEMP 0x03
@@ -92,6 +93,7 @@ static BLECharacteristic *chTx, *chHr, *chBat;
 static volatile int bleClients = 0;
 static bool bleUp = false;                                  // bleInit() sudah jalan
 static volatile uint32_t advAt = 0;                        // millis() at which to restart advertising, 0 = none
+static const uint32_t SCREEN_IDLE_MS = 7000;     // no touch / key for this long -> screen off
 static bool screenOff = false;                  // PWR short press: backlight off, rendering paused, everything else keeps running
 static uint32_t usbSeenMs = 0;                  // last command over USB
 static bool usbStream = false;
@@ -304,6 +306,41 @@ class SrvCb : public BLEServerCallbacks {
     advAt = millis() + 400;                                 // re-advertise from loop(), after the stack settled
   }
 };
+// JSON commands written by the phone / web app (time sync, profile, brightness ...), handled in loop().
+class CmdCb : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) override {
+    Line l = {};
+    String v = c->getValue();
+    strncpy(l.s, v.c_str(), sizeof l.s - 1);
+    l.src = 0;
+    xQueueSend(cmdQ, &l, 0);
+  }
+};
+
+// Standard Current Time characteristic (0x2A2B): year u16, month, day, hours, minutes, seconds, weekday, fraction/256, reason.
+// It carries the phone's LOCAL wall clock without a zone, so the zone is the last known one (WIB until told otherwise).
+static int64_t daysFromCivil(int y, unsigned m, unsigned d) {
+  y -= m <= 2;
+  int64_t era = (y >= 0 ? y : y - 399) / 400;
+  unsigned yoe = (unsigned)(y - era * 400), doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return era * 146097 + (int64_t)doe - 719468;
+}
+class TimeCb : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) override {
+    String v = c->getValue();
+    if (v.length() < 7) return;
+    const uint8_t* b = (const uint8_t*)v.c_str();
+    int year = b[0] | (b[1] << 8), mon = b[2], day = b[3], hh = b[4], mm = b[5], ss = b[6];
+    if (year < 2024 || mon < 1 || mon > 12 || day < 1 || day > 31) return;
+    int tz = model.timeValid ? model.tzMin : 420;
+    int64_t local = daysFromCivil(year, mon, day) * 86400 + hh * 3600 + mm * 60 + ss;
+    Line l = {};
+    snprintf(l.s, sizeof l.s, "{\"cmd\":\"time\",\"t\":%lld,\"tz\":%d}", (long long)(local - tz * 60), tz);
+    l.src = 0;
+    xQueueSend(cmdQ, &l, 0);
+  }
+};
+
 static void bleInit() {
   BLEDevice::init(devName);
   BLEDevice::setMTU(185);                                   // 34-40 byte packets need an MTU above 23
@@ -324,7 +361,13 @@ static void bleInit() {
   BLEService* nb = srv->createService(NB_SVC);
   chTx = nb->createCharacteristic(NB_DATA, BLECharacteristic::PROPERTY_NOTIFY);
   chTx->addDescriptor(new BLE2902());
+  BLECharacteristic* cmd = nb->createCharacteristic(NB_CMD, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
+  cmd->setCallbacks(new CmdCb());
   nb->start();
+  BLEService* cts = srv->createService(BLEUUID((uint16_t)0x1805));      // Current Time Service: the phone writes its clock here
+  BLECharacteristic* ct = cts->createCharacteristic(BLEUUID((uint16_t)0x2A2B), BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_WRITE);
+  ct->setCallbacks(new TimeCb());
+  cts->start();
 
   BLEAdvertising* adv = BLEDevice::getAdvertising();
   adv->addServiceUUID(NB_SVC);                              // archery bridge service (name starts with NOVA-BAND)
@@ -455,6 +498,7 @@ static void handleCommands() {
     if (l.src == 1) { usbSeenMs = millis(); usbStream = true; }
     int r = proto::handle(l.s, strlen(l.s), env, reply, sizeof reply);
     if (r > 0) send(reply, l.src);
+    if (strstr(l.s, "\"cmd\":\"time\"") && model.timeValid) { long long cl = model.clockNow(); Serial.printf("# waktu dari HP: %02d:%02d:%02d (zona %+d mnt)\n", (int)((cl / 3600) % 24), (int)((cl / 60) % 60), (int)(cl % 60), model.tzMin); ui.toast("Waktu tersinkron dari HP", gfx::hex(0x3BE07A)); }
   }
 }
 
@@ -474,7 +518,7 @@ void setup() {
 
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_BT);
-  snprintf(devName, sizeof devName, "NOVA-BAND-%02X%02X", mac[4], mac[5]);   // the web app filters on the "NOVA-BAND" prefix
+  snprintf(devName, sizeof devName, "Nova Sport");   // the web app also matches the advertised service UUID, so the name is free
 
   displayInit();
   if (!assetsInit()) {
@@ -524,19 +568,38 @@ void loop() {
 
   // input
   // PWR: short press = screen off / on (the ESP keeps running), hold 2 s = power off.  BOOT: next page (hold = previous).
-  if (!screenOff) { touchPoll(); ui.touch(tdown, tlx, tly); } else { tdown = false; ui.touch(false, 0, 0); }
+  // Auto screen-off after SCREEN_IDLE_MS without touch or key (saves battery). A touch or any key wakes it; that first touch is swallowed.
+  static uint32_t lastAct = millis(), offPoll = 0;
+  static bool swallow = false;
+  if (!screenOff) {
+    touchPoll();
+    if (swallow) { if (!tdown) swallow = false; ui.touch(false, 0, 0); }
+    else ui.touch(tdown, tlx, tly);
+    if (tdown) lastAct = millis();
+  } else {
+    ui.touch(false, 0, 0);
+    if (millis() - offPoll >= 100) {                          // dark: look for a finger only 10x per second
+      offPoll = millis(); touchPoll();
+      if (tdown) { screenOff = false; swallow = true; lastAct = millis(); }
+    }
+  }
   // The key that powered the watch on is still held when the firmware starts: ignore the keys until they have been released once,
   // otherwise that release counts as a short press (screen off) or the hold counts as "power off".
   static bool keysArmed = false;
   if (!keysArmed) { if (!isPressed(PIN_BTN_PREV) && !isPressed(PIN_BTN_NEXT)) keysArmed = true; }
   int e = keysArmed ? bNext.poll() : 0;
   if (e) {
+    lastAct = millis();
     if (screenOff) screenOff = false;                         // any key wakes the screen
     else if (e == 1) ui.buttonNext(false);
     else ui.buttonPrev(false);
   }
   e = keysArmed ? bPrev.poll() : 0;
+  if (e) lastAct = millis();
   if (e == 1) screenOff = !screenOff;
+  if (isPressed(PIN_BTN_PREV) || isPressed(PIN_BTN_NEXT)) lastAct = millis();
+  if (ui.booting()) lastAct = millis();
+  if (!screenOff && millis() - lastAct >= SCREEN_IDLE_MS) screenOff = true;
   if (keysArmed && bPrev.down && millis() - bPrev.downAt >= POWER_HOLD_MS) powerOff();
 
   serialPoll();
