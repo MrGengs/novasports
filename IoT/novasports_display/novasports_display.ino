@@ -5,7 +5,7 @@
 // same pages (LIVE / RUN / READINESS / LINK), model, sensors, JSON protocol, BLE services and
 // Firebase cloud link. Only the board layer differs:
 //
-//   display  ST7789V2 240x280 on SPI (Arduino_GFX), portrait. The frame is drawn as four 70-row bands
+//   display  ST7789V2 240x280 on SPI (Arduino_GFX), rotated to 280x240 landscape. The frame is drawn as four 60-row bands
 //            in one 33.6 KB buffer (no PSRAM for a full frame) and each band goes out over SPI at once.
 //   assets   Blender renders + fonts in the "assets" flash partition, memory-mapped
 //            (tools/pack_assets_c6.py -> build/assets.bin, flashed at 0x310000)
@@ -59,10 +59,13 @@ static const uint8_t TOUCH_ADDR = 0x15;
 
 // ---------------------------------------------------------------- state
 static Arduino_DataBus* lcdBus = new Arduino_HWSPI(PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, GFX_NOT_DEFINED);
-static Arduino_GFX* panel = new Arduino_ST7789(lcdBus, PIN_LCD_RST, 0, true, gfx::W, gfx::H, LCD_COL_OFFSET, LCD_ROW_OFFSET, LCD_COL_OFFSET, LCD_ROW_OFFSET);
-// The frame is drawn as four 70-row bands through one buffer (33.6 KB instead of a 134 KB frame):
+// Native panel is 240 x 280 portrait; LCD_ROT 1 or 3 turns it to 280 x 240 landscape (hardware MADCTL, no software rotate).
+// If the picture is upside down, change LCD_ROT between 1 and 3 (the touch mapping follows it).
+#define LCD_ROT 1
+static Arduino_GFX* panel = new Arduino_ST7789(lcdBus, PIN_LCD_RST, 0, true, 240, 280, LCD_COL_OFFSET, LCD_ROW_OFFSET, LCD_COL_OFFSET, LCD_ROW_OFFSET);
+// The frame is drawn as four 60-row bands through one buffer (33.6 KB instead of a 134 KB frame):
 // the UI is rendered once per band, clipped to it, and the band is sent over SPI before the next.
-static const int BAND = 70, BAND_N = gfx::H / BAND;
+static const int BAND = 60, BAND_N = gfx::H / BAND;
 static_assert(BAND * BAND_N == gfx::H, "bands must tile the panel");
 alignas(4) static uint16_t bandBuf[gfx::W * BAND];
 static gfx::Canvas canvas;
@@ -87,6 +90,7 @@ static void setBrightness(int v) { brightness = constrain(v, 10, 255); }
 // ---------------------------------------------------------------- display
 static void displayInit() {
   panel->begin(LCD_SPI_HZ);
+  panel->setRotation(LCD_ROT);
   panel->fillScreen(0);
 }
 
@@ -130,9 +134,14 @@ static int touchRead(int& x, int& y) {
   if (!(n & 0x0F)) return 0;
   if ((xh >> 6) == 1) return 2;                            // the chip's own "lift" event
   int tx = ((xh & 0x0F) << 8) | xl, ty = ((yh & 0x0F) << 8) | yl;
-  if (tx >= gfx::W + 8 || ty >= gfx::H + 8) return -1;     // 4095,4095 = ghost read, not a finger
-  x = constrain(tx, 0, gfx::W - 1);                        // panel and touch share the portrait frame
-  y = constrain(ty, 0, gfx::H - 1);
+  if (tx >= 240 + 8 || ty >= 280 + 8) return -1;          // 4095,4095 = ghost read, not a finger
+  tx = constrain(tx, 0, 239);                              // touch reports in the native portrait frame (240 x 280):
+  ty = constrain(ty, 0, 279);                              // rotate it into the landscape frame
+#if LCD_ROT == 1
+  x = 279 - ty; y = tx;
+#else
+  x = ty; y = 239 - tx;
+#endif
   return 1;
 }
 
@@ -385,6 +394,15 @@ static void serialPoll() {
           sensors::data.simUntil = millis() + secs * 1000UL;
           Serial.printf("# simwalk %d dtk\n", secs); n = 0; continue;
         }
+        if (!strncmp(line, "batcal", 6)) {            // kalibrasi baterai: "batcal 3.87" (V, multimeter) / "batcal reset"
+          if (strstr(line, "reset")) { battery::calibrateReset(); Serial.println("# batcal: kembali ke pembagi bawaan"); }
+          else {
+            float v = atof(line + 6);
+            if (battery::calibrate(v)) Serial.printf("# batcal: ok, pembagi %.3f\n", battery::dividerValue());
+            else Serial.println("# batcal: ditolak (cabut USB dulu, nilai dalam volt 2.5-4.3, selisih terlalu besar?)");
+          }
+          n = 0; continue;
+        }
         Line l = {};
         strncpy(l.s, line, sizeof l.s - 1);
         l.src = 1;
@@ -502,7 +520,7 @@ void loop() {
   static uint32_t batLogT = 0;
   if (millis() - batLogT >= 10000) {
     batLogT = millis();
-    Serial.printf("# batt pin %d mV  sel %d mV  %d%%  %s\n", battery::pinMillivolts(), battery::millivolts(), battery::percent(),
+    Serial.printf("# batt pin %d mV  sel %d mV (div %.3f)  %d%%  %s\n", battery::pinMillivolts(), battery::millivolts(), battery::dividerValue(), battery::percent(),
                   battery::isCharging() ? "DICAS (persen perkiraan, maks 99)" : "baterai");
   }
   static uint32_t dbgT = 0;

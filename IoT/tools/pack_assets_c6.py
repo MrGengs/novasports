@@ -1,10 +1,10 @@
 """
-Pack screen assets for the NovaSports ESP32-C6 display (240 x 280 portrait).
+Pack screen assets for the NovaSports ESP32-C6 display (280 x 240 landscape).
 
     python3 tools/pack_assets_c6.py [--novaband ../../novaband]
 
 Reuses the Nova-Band asset pipeline's output and re-targets it to the portrait panel:
-  splash  <- novaband/build/screen/splash/f_*.png   (gold Blender renders, every 2nd frame, 240x280)
+  splash  <- novaband/build/screen/splash/f_*.png   (gold Blender renders, every 2nd frame, 280x240)
   spin    <- novaband/build/screen/spin/f_*.png     (3D band turntable)
   bg      <- generated here: gold bokeh, half-res 240x140 (firmware upscales 2x -> 480x280 parallax strip)
   heart, icons, fonts, QR  <- copied byte-for-byte from novaband/firmware/prebuilt/assets.bin
@@ -19,7 +19,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 ap.add_argument("--novaband", default=os.path.normpath(os.path.join(here, "..", "..", "..", "novaband")))
 args = ap.parse_args()
 NB = args.novaband
-W, H = 240, 280
+W, H = 280, 240
 BAYER = (np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) + 0.5) / 16.0
 
 def to565(rgb):
@@ -36,7 +36,7 @@ def add(name, typ, w, h, frames, data, extra=0):
 
 # ---- splash: the landscape render sits in the upper-middle, black above/below, wordmark drawn by the UI
 fr = sorted(glob.glob(os.path.join(NB, "build", "screen", "splash", "f_*.png")))[::2]
-RW, RH = 240, 127; RY = 24
+RW, RH = 280, 148; RY = 4
 yy = np.arange(H)[:, None]
 mask = np.zeros((H, 1), np.float32)
 band = (yy - RY) / RH
@@ -53,9 +53,9 @@ for i, f in enumerate(fr):
     blob += to565(canvas * fade).tobytes()
 add("splash", 1, W, H, len(fr), bytes(blob))
 
-# ---- bg: gold bokeh, half-res 240 x 140
+# ---- bg: gold bokeh, half-res 240 x 120
 rng = np.random.default_rng(7)
-bw, bh = 480, 280
+bw, bh = 480, 240
 img = Image.new("RGB", (bw, bh), (20, 16, 0))
 g = np.asarray(img).astype(np.float32)
 Y, X = np.mgrid[0:bh, 0:bw]
@@ -71,8 +71,8 @@ lay = lay.filter(ImageFilter.GaussianBlur(5))
 bg = np.clip(np.asarray(img).astype(np.float32) + np.asarray(lay).astype(np.float32), 0, 255)
 vig = 1 - 0.5 * (((X - bw / 2) / (bw * 0.7)) ** 2 + ((Y - bh / 2) / (bh * 0.7)) ** 2)
 bg *= np.clip(vig, 0.3, 1)[..., None] * 0.8
-bgh = np.asarray(Image.fromarray(bg.astype(np.uint8)).resize((240, 140), Image.LANCZOS))
-add("bg", 1, 240, 140, 1, to565(bgh).tobytes())
+bgh = np.asarray(Image.fromarray(bg.astype(np.uint8)).resize((240, 120), Image.LANCZOS))
+add("bg", 1, 240, 120, 1, to565(bgh).tobytes())
 
 # ---- spin (gold band turntable)
 spin = sorted(glob.glob(os.path.join(NB, "build", "screen", "spin", "f_*.png")))

@@ -1,6 +1,6 @@
 # NovaSports display — ESP32-C6-Touch-LCD-1.69
 
-Firmware jam NovaSports untuk papan **Waveshare ESP32-C6-Touch-LCD-1.69** (layar 240 × 280, portrait).
+Firmware jam NovaSports untuk papan **Waveshare ESP32-C6-Touch-LCD-1.69** (layar 280 × 240, landscape).
 Isinya sama dengan `novaband/firmware/novaband_display` (T-Display-S3): halaman **LIVE / RUN / READINESS / LINK**,
 model sesi lari, sensor MAX30102 + MLX90614 (+ IMU QMI8658 onboard untuk langkah), protokol JSON (BLE + USB serial), BLE HR/Battery
 standar, dan cloud Firebase RTDB. Yang berbeda hanya lapisan board (layar, sentuh, tombol, daya, I2C).
@@ -9,7 +9,7 @@ standar, dan cloud Firebase RTDB. Yang berbeda hanya lapisan board (layar, sentu
 
 | | T-Display-S3 | ESP32-C6-Touch-LCD-1.69 |
 |---|---|---|
-| Layar | 320×170 landscape, bus i80 + DMA | 240×280 portrait, SPI (Arduino_GFX), render 4 pita × 70 baris |
+| Layar | 320×170 landscape, bus i80 + DMA | 280×240 landscape, SPI (Arduino_GFX), render 4 pita × 60 baris |
 | PSRAM | 8 MB | tidak ada → aset dibaca langsung dari flash (mmap) |
 | I2C | Wire (sentuh) + Wire1 (sensor) | satu bus (SDA 8 / SCL 7, 100 kHz) dipakai bersama, diatur mutex (`i2c_lock.h`) |
 | Tombol | BOOT (GPIO0) + KEY (GPIO14) | BOOT (GPIO9) = berikutnya · PWR (GPIO18) = sebelumnya |
@@ -55,3 +55,8 @@ sim/sim build/assets.bin out/      # menulis PPM per halaman
   log `# fps` / `# slow frame`). Bila terasa patah, turunkan efek (specks/glow) di `src/ui.cpp`.
 - Pin dan perilaku tombol PWR diukur saat boot (lihat `pwrKeyBegin`); nilai pembagi baterai perlu dikalibrasi
   (`battery.h`, DIVIDER) dengan multimeter.
+- Layar landscape: `LCD_ROT` (1 atau 3) di `novasports_display.ino`. Bila gambar terbalik, ganti nilainya; sentuh mengikuti otomatis.
+  Aset harus dipak ulang (`tools/pack_assets_c6.py`) karena splash/background sekarang 280×240.
+- Suhu tubuh: kartu **BODY TEMP** di halaman LIVE (MLX90614; >= 37,5 C = HIGH).
+- Kalibrasi baterai: cabut USB, ukur tegangan baterai dengan multimeter, ketik di serial monitor `batcal 3.87`
+  (volt). Pembagi disimpan di NVS; `batcal reset` untuk kembali ke bawaan.

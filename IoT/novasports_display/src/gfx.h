@@ -1,4 +1,4 @@
-// Nova-Band display — software renderer for a 240 x 280 RGB565 frame (ESP32-C6-Touch-LCD-1.69, portrait).
+// Nova-Band display — software renderer for a 280 x 240 RGB565 frame (ESP32-C6-Touch-LCD-1.69, landscape).
 // Portable C++ (no Arduino headers): the same code draws on the ESP32-S3 and
 // in the PC simulator (firmware/sim), so every frame can be checked as a PNG.
 #pragma once
@@ -7,7 +7,7 @@
 
 namespace gfx {
 
-constexpr int W = 240, H = 280;
+constexpr int W = 280, H = 240;
 
 inline uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
   return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));

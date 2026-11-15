@@ -12,8 +12,9 @@
 //     3 dtk ke nilai terukur, tidak melompat.
 //   * Persen terakhir disimpan di NVS, jadi reboot/brownout tidak menjatuhkan angka.
 //
-// KALIBRASI (sekali, dengan multimeter): ukur tegangan baterai SAAT TIDAK DICAS di konektor baterai
-// (V_ukur), lihat "bv" di serial/RTDB (V_baca). DIVIDER_BARU = DIVIDER_LAMA * V_ukur / V_baca.
+// KALIBRASI (sekali, dengan multimeter): ukur tegangan baterai SAAT TIDAK DICAS (cabut USB) di konektor
+// baterai, lalu ketik di serial monitor:  batcal 3.87   (volt hasil ukur). Pembagi baru dihitung otomatis dan
+// disimpan di NVS (bertahan setelah reboot). "batcal reset" mengembalikan ke bawaan (3,0).
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
@@ -21,7 +22,7 @@
 namespace battery {
 
 static const int PIN = 0;
-static const float DIVIDER = 3.0f;                 // Vbaterai / Vpin (dikalibrasi, lihat atas)
+static const float DIVIDER_DEFAULT = 3.0f;         // Vbaterai / Vpin bawaan (pembagi 200k/100k di board)
 static const int PLUG_MV = 4300, UNPLUG_MV = 4250; // histeresis: di atas ini = USB (pin membaca rel USB)
 static const float CHARGE_PCT_PER_MIN = 0.8f;      // perkiraan laju isi saat dicas (pagar, bukan pengukuran)
 
@@ -47,6 +48,7 @@ inline int toPercent(int mv) {
 namespace {
 const int SLOTS = 24;                              // 24 x 5 dtk = 2 menit
 Preferences prefs;
+float divider = DIVIDER_DEFAULT;
 int saved = -1, pct = -1, pinMv = 0;
 float emaMv = 0, prevMv = 0, chgPct = 0;
 bool charging = false;
@@ -64,6 +66,8 @@ void clearWindow() { slotN = slotI = 0; curSlotMin = 0; slotAt = 0; baseMv = 0; 
 inline void begin() {
   prefs.begin("batt", false);
   saved = prefs.getChar("pct", -1);
+  float d = prefs.getFloat("div", DIVIDER_DEFAULT);
+  if (d >= 2.4f && d <= 3.6f) divider = d;
   analogReadResolution(12);
 }
 
@@ -77,7 +81,7 @@ inline void update() {
   int s[9];
   for (int i = 0; i < 9; i++) { s[i] = analogReadMilliVolts(PIN); delayMicroseconds(300); }
   pinMv = median9(s);
-  float v = pinMv * DIVIDER;
+  float v = pinMv * divider;
   float dt = updAt ? (now - updAt) / 1000.f : .5f;
   updAt = now;
 
@@ -118,6 +122,22 @@ inline void update() {
   }
   if (now - saveAt >= 60000) { saveAt = now; save(); }
 }
+
+// Kalibrasi dari tegangan sel hasil ukur multimeter (volt). Hanya saat TIDAK dicas.
+inline bool calibrate(float volts) {
+  if (charging || emaMv < 2500 || volts < 2.5f || volts > 4.3f) return false;
+  float k = volts * 1000.f / emaMv;
+  if (k < .8f || k > 1.25f) return false;
+  float d = divider * k;
+  if (d < 2.4f || d > 3.6f) return false;
+  divider = d;
+  prefs.putFloat("div", d);
+  emaMv = volts * 1000.f; prevMv = emaMv;
+  clearWindow();
+  return true;
+}
+inline void calibrateReset() { divider = DIVIDER_DEFAULT; prefs.remove("div"); emaMv = 0; clearWindow(); }
+inline float dividerValue() { return divider; }
 
 inline int percent() { return pct < 0 ? 0 : pct; }
 inline bool isCharging() { return charging; }

@@ -34,8 +34,8 @@ void seedSpecks() {
   uint32_t s = 12345;
   auto rnd = [&s]() { s = s * 1664525u + 1013904223u; return (s >> 8) / 16777216.f; };
   const uint16_t pal[4] = {ROSE, CREAM, WINE_HI, hex(0xFFE9A0)};
-  for (auto& p : far_) p = {rnd() * 300, rnd() * 280, 1.5f + rnd() * 3.5f, 2 + rnd() * 5, .25f + rnd() * .35f, pal[(int)(rnd() * 4) & 3]};
-  for (auto& p : near_) p = {rnd() * 480, rnd() * 280, 12 + rnd() * 14, 5 + rnd() * 6, .10f + rnd() * .08f, pal[(int)(rnd() * 4) & 3]};
+  for (auto& p : far_) p = {rnd() * 300, rnd() * 240, 1.5f + rnd() * 3.5f, 2 + rnd() * 5, .25f + rnd() * .35f, pal[(int)(rnd() * 4) & 3]};
+  for (auto& p : near_) p = {rnd() * 480, rnd() * 240, 12 + rnd() * 14, 5 + rnd() * 6, .10f + rnd() * .08f, pal[(int)(rnd() * 4) & 3]};
 }
 }  // namespace
 
@@ -80,7 +80,7 @@ void Ui::touch(bool down, int x, int y) {
     float dx = x - downX_;
     if (!dragging_ && fabsf(dx) > 5) dragging_ = true;
     if (dragging_) {
-      float p = downPage_ - dx / (float)W;
+      float p = downPage_ + dx / (float)W;                   // inverted: swipe right -> pages move left
       if (p < 0) p *= .35f;                                  // rubber band at the ends
       if (p > PAGES - 1) p = (PAGES - 1) + (p - (PAGES - 1)) * .35f;
       dragTarget_ = p; pageV_ = 0;
@@ -92,13 +92,13 @@ void Ui::touch(bool down, int x, int y) {
     down_ = false;
     if (dragging_) {
       dragging_ = false;
-      float proj = pageF_ - velX_ / W * .30f;               // a flick carries to the next page
+      float proj = pageF_ + velX_ / W * .30f;               // a flick carries to the next page
       int p = (int)lroundf(proj);
       int from = (int)lroundf(downPage_);                   // at most one page per swipe
       if (p > from + 1) p = from + 1;
       if (p < from - 1) p = from - 1;
       goPage(p);
-      pageV_ = fmaxf(-5.f, fminf(5.f, -velX_ / W));
+      pageV_ = fmaxf(-5.f, fminf(5.f, velX_ / W));
     } else if (t_ - downT_ < .4f && target_ == 1) {
       buttonNext(true);                                     // tap on RUN = start / pause
     }
@@ -160,7 +160,8 @@ void Ui::render(Canvas& c) {
     if (ox > -W && ox < W) drawPage(c, i, ox);
   }
   // near specks: large, soft, fast — the out-of-focus foreground
-  for (auto& p : near_) {
+  const bool still = pageF_ > 2.6f;                         // LINK page: no floating specks (too heavy for the C6)
+  if (!still) for (auto& p : near_) {
     float x = fmodf(p.x - pageF_ * 320 + t_ * p.v + 4800, 480) - 120;
     float y = p.y + sinf(t_ * .3f + p.x) * 6;
     c.glow(x, y, p.r, p.c, A8(p.a));
@@ -193,25 +194,25 @@ void Ui::drawBoot(Canvas& c, float tb, uint8_t alpha) {
     char s[2] = {word[i], 0};
     float e = easeBack((tb - (.95f + i * .06f)) / .45f);
     float a = clamp01((tb - (.95f + i * .06f)) / .3f) * ga;
-    c.text(fBrand_, s, x, 200 + (int)((1 - e) * 12), i >= 4 ? WINE_HI : WHITE, A8(a));
+    c.text(fBrand_, s, x, 188 + (int)((1 - e) * 12), i >= 4 ? WINE_HI : WHITE, A8(a));
     x += Canvas::textWidth(fBrand_, s) + (int)tr;
   }
   float la = easeOut((tb - 1.7f) / .5f);
-  c.rect(W / 2 - (int)(59 * la), 211, (int)(118 * la), 2, WINE_HI, A8(.9f * ga));
+  c.rect(W / 2 - (int)(59 * la), 199, (int)(118 * la), 2, WINE_HI, A8(.9f * ga));
   const char* tag = "AIoT upper-arm wearable";
-  c.text(fSmall_, tag, (W - Canvas::textWidth(fSmall_, tag)) / 2, 234, ROSE, A8(clamp01((tb - 1.55f) / .5f) * ga));
+  c.text(fSmall_, tag, (W - Canvas::textWidth(fSmall_, tag)) / 2, 218, ROSE, A8(clamp01((tb - 1.55f) / .5f) * ga));
   const char* foot = "ISIF 2026  |  SMAN 1 SURAKARTA";
-  c.text(fLabel_, foot, (W - Canvas::textWidth(fLabel_, foot, 1)) / 2, 264, CREAM, A8(clamp01((tb - 2.1f) / .5f) * .75f * ga), 1);
+  c.text(fLabel_, foot, (W - Canvas::textWidth(fLabel_, foot, 1)) / 2, 234, CREAM, A8(clamp01((tb - 2.1f) / .5f) * .75f * ga), 1);
 }
 
 void Ui::drawWorld(Canvas& c) {
-  Image bg = A_->image(A::BG);                              // half resolution, 240 x 140
+  Image bg = A_->image(A::BG);                              // half resolution, 240 x 120
   const int span = bg.w * 2 - W;                             // parallax travel, full-res px
   float sx = pageF_ * span / (PAGES - 1);
   if (sx < 0) sx = 0;
   if (sx > span) sx = (float)span;
   c.upscale2x(bgPx_ ? bgPx_ : bg.px, bg.w, bg.h, (int)sx);
-  for (auto& p : far_) {                                    // far specks drift up slowly
+  if (pageF_ <= 2.6f) for (auto& p : far_) {               // far specks drift up slowly
     float x = fmodf(p.x - pageF_ * 30 + 3000, 300) - 30;
     float y = fmodf(p.y - t_ * p.v + 2900, 300) - 10;
     c.glow(x, y, p.r * 2.2f, p.c, A8(p.a * (.7f + .3f * sinf(t_ * 1.3f + p.x))));
@@ -236,45 +237,62 @@ void Ui::drawPage(Canvas& c, int i, int ox) {
 }
 
 // ------------------------------------------------------------------ LIVE
-// Portrait 240 x 280: heart-rate card on top, PPG wave + cadence/steps card below.
+// Landscape 280 x 240: heart-rate card + body-temperature card on top, PPG wave + cadence/steps card below.
 void Ui::pageLive(Canvas& c, int ox) {
   const Metrics& m = M_->m;
   char buf[32];
   float e0 = intro(0), e1 = intro(1);
   int dy0 = (int)((1 - e0) * 18), dy1 = (int)((1 - e1) * 18);
-  glass(c, 12 + ox, 28, 216, 126, 0);
-  glass(c, 12 + ox, 162, 216, 100, 1);
+  glass(c, 10 + ox, 28, 160, 118, 0);
+  glass(c, 178 + ox, 28, 92, 118, 0);
+  glass(c, 10 + ox, 154, 260, 72, 1);
 
-  c.text(fLabel_, "HEART RATE", 24 + ox, 45 + dy0, ROSE, A8(e0), 1);
-  if (M_->demo) c.text(fLabel_, "DEMO", 40 + ox, 124 + dy0, AMBER, A8(.75f * e0), 1);
-  if (M_->real && !M_->hrOk) c.text(fLabel_, "NO SIGNAL", 24 + ox, 61 + dy0, AMBER, A8(.85f * e0), 1);
-  if (M_->real && M_->tempOk) {
-    snprintf(buf, sizeof buf, "%.1f C", m.temp);
-    c.text(fLabel_, buf, 216 + ox - Canvas::textWidth(fLabel_, buf), 61 + dy0, CREAM, A8(.8f * e0));
-  }
+  // ---- heart rate
+  c.text(fLabel_, "HEART RATE", 22 + ox, 45 + dy0, ROSE, A8(e0), 1);
+  if (M_->demo) c.text(fLabel_, "DEMO", 38 + ox, 122 + dy0, AMBER, A8(.75f * e0), 1);
+  if (M_->real && !M_->hrOk) c.text(fLabel_, "NO SIGNAL", 22 + ox, 59 + dy0, AMBER, A8(.85f * e0), 1);
   float pulse = expf(-beatT_ * 9.f);
-  c.glow(58 + ox, 92 + dy0, 30 + 8 * pulse, WINE_HI, A8((.22f + .35f * pulse) * e0));
+  c.glow(50 + ox, 88 + dy0, 28 + 8 * pulse, WINE_HI, A8((.22f + .35f * pulse) * e0));
   int hf = (int)(pulse * (A_->frames(A::HEART) - .01f));   // pre-scaled beat frames
   Sprite heart = A_->sprite(A::HEART, hf);
-  c.sprite(heart, 58 + ox - heart.w / 2, 92 + dy0 - heart.h / 2, A8(e0));
+  c.sprite(heart, 50 + ox - heart.w / 2, 88 + dy0 - heart.h / 2, A8(e0));
   if (M_->real && !M_->hrOk) snprintf(buf, sizeof buf, "--"); else snprintf(buf, sizeof buf, "%d", (int)lroundf(hrShown_));
-  c.text(fBig_, buf, 98 + ox, 108 + dy0, WHITE, A8(e0), -2);
-  c.text(fLabel_, "BPM", 101 + ox, 122 + dy0, ROSE, A8(e0), 1);
+  c.text(fBig_, buf, 88 + ox, 104 + dy0, WHITE, A8(e0), -2);
+  c.text(fLabel_, "BPM", 92 + ox, 118 + dy0, ROSE, A8(e0), 1);
   if (M_->real && !M_->spo2Ok) snprintf(buf, sizeof buf, "SpO2 --"); else snprintf(buf, sizeof buf, "SpO2 %d%%", (int)lroundf(m.spo2));
-  c.text(fLabel_, buf, 216 + ox - Canvas::textWidth(fLabel_, buf), 45 + dy0, CREAM, A8(.8f * e0));
+  c.text(fLabel_, buf, 162 + ox - Canvas::textWidth(fLabel_, buf), 45 + dy0, CREAM, A8(.8f * e0));
   // zone chip, filled to %HRmax inside the zone scale 50..100 %
   int z = m.zone;
   float pct = clamp01((hrShown_ / M_->profile.hrMax - .5f) / .5f);
-  c.rrect(24 + ox, 128 + dy0, 192, 20, 10, ZONE_C[z], A8(.22f * e0));
-  c.rrect(24 + ox, 128 + dy0, 20 + 172 * pct, 20, 10, ZONE_C[z], A8(.55f * e0));
+  c.rrect(20 + ox, 122 + dy0, 140, 18, 9, ZONE_C[z], A8(.22f * e0));
+  c.rrect(20 + ox, 122 + dy0, 18 + 122 * pct, 18, 9, ZONE_C[z], A8(.55f * e0));
   if (M_->real && !M_->hrOk) snprintf(buf, sizeof buf, "Z-  --"); else snprintf(buf, sizeof buf, "Z%d  %s", z, ZONE_N[z]);
   int tw = Canvas::textWidth(fLabel_, buf, 1);
-  c.text(fLabel_, buf, 24 + ox + (192 - tw) / 2, 142 + dy0, WHITE, A8(e0), 1);
+  c.text(fLabel_, buf, 20 + ox + (140 - tw) / 2, 135 + dy0, WHITE, A8(e0), 1);
 
-  // PPG wave
-  c.text(fLabel_, "PPG  LIVE", 24 + ox, 179 + dy1, ROSE, A8(e1), 1);
-  c.circle(216 + ox, 175 + dy1, 3, GREEN, A8((.55f + .45f * pulse) * e1));
-  const int x0 = 22 + ox, wy = 186 + dy1, ww = 196, wh = 42, N = Model::PPG_N;
+  // ---- body temperature (MLX90614)
+  c.text(fLabel_, "BODY TEMP", 188 + ox, 45 + dy0, ROSE, A8(e0), 1);
+  bool tOk = M_->tempOk && m.temp > 0;
+  const char* tst = "NO SENSOR";
+  uint16_t tcol = ROSE;
+  if (tOk) {
+    if (m.temp >= 37.5f) { tst = "HIGH"; tcol = RED; }
+    else if (m.temp >= 35.0f) { tst = "NORMAL"; tcol = GREEN; }
+    else { tst = "LOW"; tcol = AMBER; }
+    snprintf(buf, sizeof buf, "%.1f", m.temp);
+  } else snprintf(buf, sizeof buf, "--");
+  tw = Canvas::textWidth(fTitle_, buf);
+  c.text(fTitle_, buf, 224 + ox - tw / 2, 88 + dy0, tOk ? WHITE : ROSE, A8(e0));
+  tw = Canvas::textWidth(fLabel_, "deg C", 1);
+  c.text(fLabel_, "deg C", 224 + ox - tw / 2, 104 + dy0, ROSE, A8(e0), 1);
+  tw = Canvas::textWidth(fLabel_, tst, 1);
+  c.rrect(224.f + ox - (tw + 14) / 2.f, 114.f + dy0, (float)tw + 14, 18, 9, tcol, A8(.28f * e0));
+  c.text(fLabel_, tst, 224 + ox - tw / 2, 127 + dy0, tcol == ROSE ? ROSE : WHITE, A8(e0), 1);
+
+  // ---- PPG wave
+  c.text(fLabel_, "PPG  LIVE", 22 + ox, 171 + dy1, ROSE, A8(e1), 1);
+  c.circle(160 + ox, 167 + dy1, 3, GREEN, A8((.55f + .45f * pulse) * e1));
+  const int x0 = 20 + ox, wy = 178 + dy1, ww = 140, wh = 40, N = Model::PPG_N;
   float lo = 1e9f, hi = -1e9f;
   for (int k = N - ww; k < N; k++) {
     float v = M_->ppg[(M_->ppgHead + k) % N];
@@ -292,16 +310,14 @@ void Ui::pageLive(Canvas& c, int ox) {
   float px = (float)(x0 + ww - 1), py = ys[ww - 1];
   c.glow(px, py, 9, PULSE, A8(.8f * e1));
   c.circle(px, py, 2.2f, WHITE, A8(e1));
-  // cadence + steps
-  c.sprite(A_->sprite(A::IC_FOOTSTEPS), 22 + ox, 232 + dy1, A8(e1));
+  // cadence + steps, stacked on the right
+  c.sprite(A_->sprite(A::IC_FOOTSTEPS), 182 + ox, 162 + dy1, A8(e1));
   if (M_->real && !M_->cadOk) snprintf(buf, sizeof buf, "--"); else snprintf(buf, sizeof buf, "%d", (int)lroundf(m.cadence));
-  int w = c.text(fBody_, buf, 48 + ox, 248 + dy1, WHITE, A8(e1));
-  c.text(fLabel_, "spm", 51 + ox + w, 248 + dy1, ROSE, A8(e1));
+  int w = c.text(fBody_, buf, 208 + ox, 180 + dy1, WHITE, A8(e1));
+  c.text(fLabel_, "spm", 211 + ox + w, 180 + dy1, ROSE, A8(e1));
   snprintf(buf, sizeof buf, "%lu", (unsigned long)m.steps);
-  tw = Canvas::textWidth(fBody_, buf);
-  c.text(fBody_, buf, 216 + ox - tw, 248 + dy1, WHITE, A8(e1));
-  c.text(fLabel_, "STEPS", 216 + ox - Canvas::textWidth(fLabel_, "STEPS", 1), 259 + dy1, ROSE, A8(.8f * e1), 1);
-  c.text(fLabel_, "CADENCE", 48 + ox, 259 + dy1, ROSE, A8(.8f * e1), 1);
+  c.text(fBody_, buf, 182 + ox, 208 + dy1, WHITE, A8(e1));
+  c.text(fLabel_, "STEPS", 186 + ox + Canvas::textWidth(fBody_, buf), 208 + dy1, ROSE, A8(.8f * e1), 1);
 }
 
 // ------------------------------------------------------------------ RUN
@@ -312,8 +328,8 @@ void Ui::pageRun(Canvas& c, int ox) {
   const Tile tiles[4] = {{"TIME", A::IC_STOPWATCH, "min:sec"}, {"PACE", A::IC_GAUGE, "/km"},
                          {"DISTANCE", A::IC_MAP_PIN, "km"}, {"ENERGY", A::IC_FLAME, "kcal"}};
   for (int i = 0; i < 4; i++) {
-    int x = (i & 1 ? 124 : 12) + ox, y = i < 2 ? 28 : 148;
-    glass(c, (float)x, (float)y, 104, 112, i);
+    int x = (i & 1 ? 144 : 10) + ox, y = i < 2 ? 28 : 126;
+    glass(c, (float)x, (float)y, 126, 92, i);
     int s = (int)m.elapsed;
     switch (i) {
       case 0: snprintf(v, sizeof v, "%02d:%02d", s / 60, s % 60); break;
@@ -324,19 +340,19 @@ void Ui::pageRun(Canvas& c, int ox) {
       case 2: snprintf(v, sizeof v, "%.2f", m.dist); break;
       default: snprintf(v, sizeof v, "%d", (int)m.kcal); break;
     }
-    c.sprite(A_->sprite(tiles[i].icon), x + 10, y + 9);
-    c.text(fLabel_, tiles[i].label, x + 12, y + 50, ROSE, 255, 1);
-    c.text(fTitle_, v, x + 12, y + 80, WHITE);
-    if (*tiles[i].unit) c.text(fSmall_, tiles[i].unit, x + 12, y + 98, ROSE);
+    c.sprite(A_->sprite(tiles[i].icon), x + 10, y + 8);
+    c.text(fLabel_, tiles[i].label, x + 38, y + 24, ROSE, 255, 1);
+    c.text(fTitle_, v, x + 12, y + 62, WHITE);
+    if (*tiles[i].unit) c.text(fSmall_, tiles[i].unit, x + 12, y + 81, ROSE);
   }
   // centre pill: what a tap will do
   const char* hint = !m.running ? "TAP TO START" : (m.paused ? "PAUSED - TAP" : nullptr);
   if (hint) {
     float p = .75f + .25f * sinf(t_ * 3.2f);
     int tw = Canvas::textWidth(fLabel_, hint, 1);
-    int bx = 120 + ox - (tw + 24) / 2;
-    c.rrect((float)bx, 130, (float)tw + 24, 20, 10, m.paused ? AMBER : WINE_HI, A8(.92f));
-    c.text(fLabel_, hint, bx + 12, 144, WHITE, A8(p), 1);
+    int bx = 140 + ox - (tw + 24) / 2;
+    c.rrect((float)bx, 113, (float)tw + 24, 20, 10, m.paused ? AMBER : WINE_HI, A8(.92f));
+    c.text(fLabel_, hint, bx + 12, 127, WHITE, A8(p), 1);
   }
 }
 
@@ -344,17 +360,17 @@ void Ui::pageRun(Canvas& c, int ox) {
 void Ui::pageReady(Canvas& c, int ox) {
   const Metrics& m = M_->m;
   char buf[24];
-  glass(c, 12 + ox, 28, 216, 120, 0);
-  glass(c, 12 + ox, 156, 216, 106, 1);
-  c.text(fLabel_, "READINESS", 24 + ox, 45, ROSE, 255, 1);
-  float cx = 120 + ox, cy = 98, r0 = 34, r1 = 44;
+  glass(c, 10 + ox, 28, 120, 190, 0);
+  glass(c, 138 + ox, 28, 132, 190, 1);
+  c.text(fLabel_, "READINESS", 22 + ox, 45, ROSE, 255, 1);
+  float cx = 70 + ox, cy = 124, r0 = 34, r1 = 46;
   const float A0 = -2.356f, SWEEP = 4.712f;                  // 270 deg gauge, gap at the bottom
   float v = clamp01(readyShown_ / 100.f);
   uint16_t col = readyShown_ >= 75 ? GREEN : readyShown_ >= 50 ? AMBER : RED;
   c.ring(cx, cy, r0, r1, A0, A0 + SWEEP, WHITE, 26, true);
   c.ring(cx, cy, r0, r1, A0, A0 + SWEEP * v, col, 255, true);
   float ea = A0 + SWEEP * v;
-  c.glow(cx + sinf(ea) * 39, cy - cosf(ea) * 39, 12, col, 120);
+  c.glow(cx + sinf(ea) * 40, cy - cosf(ea) * 40, 12, col, 120);
   if (M_->real) snprintf(buf, sizeof buf, "--"); else snprintf(buf, sizeof buf, "%d", (int)lroundf(readyShown_));
   int tw = Canvas::textWidth(fTitle_, buf);
   c.text(fTitle_, buf, (int)cx - tw / 2, (int)cy + 8, WHITE);
@@ -362,35 +378,31 @@ void Ui::pageReady(Canvas& c, int ox) {
   c.text(fLabel_, "/ 100", (int)cx - tw / 2, (int)cy + 22, ROSE, 200, 1);
 
   const char* head = M_->real ? "No data yet" : m.readiness >= 75 ? "Go for tempo" : m.readiness >= 50 ? "Easy run today" : "Rest day";
-  c.text(fBody_, head, 24 + ox, 176, WHITE);
-  c.text(fSmall_, M_->real ? "Needs HRV + sleep" : m.readiness >= 75 ? "Well recovered" : "Recovery in progress", 24 + ox, 192, ROSE);
+  c.text(fBody_, head, 150 + ox, 52, WHITE);
+  c.text(fSmall_, M_->real ? "Needs HRV + sleep" : m.readiness >= 75 ? "Well recovered" : "Recovery in progress", 150 + ox, 68, ROSE);
   struct Row { const char* k; char v[12]; float f; uint16_t c; } rows[3] = {
       {"HRV", "", .68f, BLUE}, {"SLEEP", "", 7.67f / 9.f, hex(0xB28DFF)}, {"LOAD", "", clamp01(loadShown_ / 150.f), AMBER}};
   if (M_->real) { snprintf(rows[0].v, 12, "--"); snprintf(rows[1].v, 12, "--"); rows[0].f = rows[1].f = 0; }
   else { snprintf(rows[0].v, 12, "68 ms"); snprintf(rows[1].v, 12, "7h 40m"); }
   snprintf(rows[2].v, 12, "%d", (int)lroundf(loadShown_));
   for (int i = 0; i < 3; i++) {
-    int y = 212 + i * 17;
-    c.text(fLabel_, rows[i].k, 24 + ox, y, ROSE, 255, 1);
+    int y = 112 + i * 32;
+    c.text(fLabel_, rows[i].k, 150 + ox, y, ROSE, 255, 1);
     int w = Canvas::textWidth(fLabel_, rows[i].v);
-    c.text(fLabel_, rows[i].v, 216 + ox - w, y, WHITE);
+    c.text(fLabel_, rows[i].v, 258 + ox - w, y, WHITE);
     float grow = easeOut((t_ - pageEnterT_[2] - i * .08f) / .6f);
-    c.rrect(24 + ox, y + 3, 192, 4, 2, WHITE, 30);
-    c.rrect(24 + ox, y + 3, 192 * rows[i].f * grow, 4, 2, rows[i].c, 230);
+    c.rrect(150 + ox, y + 5, 108, 4, 2, WHITE, 30);
+    c.rrect(150 + ox, y + 5, 108 * rows[i].f * grow, 4, 2, rows[i].c, 230);
   }
 }
 
 // ------------------------------------------------------------------ LINK
 void Ui::pageLink(Canvas& c, int ox) {
-  glass(c, 12 + ox, 28, 216, 106, 0);
-  glass(c, 12 + ox, 142, 216, 120, 1);
-  int nf = A_->frames(A::SPIN);
-  float pos = fmodf(t_ * 14.f, (float)nf);                   // 36 turntable frames = 10 deg each
-  int f = (int)pos;
-  float fr = pos - f;
-  c.glow(66 + ox, 82, 40, WINE, 70);
-  c.spriteScaled(A_->sprite(A::SPIN, f), 66.f + ox, 82.f, .86f);
-  c.spriteScaled(A_->sprite(A::SPIN, (f + 1) % nf), 66.f + ox, 82.f, .86f, A8(fr));   // cross-fade to the next frame
+  glass(c, 10 + ox, 28, 126, 190, 0);
+  glass(c, 144 + ox, 28, 126, 190, 1);
+  // Static band picture: no turntable, no scaling, no glow - those were too heavy for the C6 (no FPU).
+  Sprite band = A_->sprite(A::SPIN, 4 % A_->frames(A::SPIN));
+  c.sprite(band, 73 + ox - band.w / 2, 34);
   const char* st;
   uint16_t sc;
   float blink = 1;
@@ -400,20 +412,28 @@ void Ui::pageLink(Canvas& c, int ox) {
     case Link::Advertising: st = "READY TO PAIR"; sc = BLUE; blink = .45f + .55f * (sinf(t_ * 4) * .5f + .5f); break;
     default: st = "OFFLINE"; sc = ROSE; break;
   }
-  c.circle(128 + ox, 52, 3.2f, sc, A8(blink));
-  c.text(fLabel_, st, 137 + ox, 56, WHITE, 255, 1);
-  c.text(fSmall_, devName_, 120 + ox, 82, WHITE);
+  c.circle(24 + ox, 152, 3.2f, sc, A8(blink));
+  c.text(fLabel_, st, 33 + ox, 156, WHITE, 255, 1);
+  c.text(fSmall_, devName_, 22 + ox, 178, WHITE);
   const char* sub = linkDetail_[0] ? linkDetail_ : "Scan QR for the app";
-  c.text(fLabel_, sub, 120 + ox, 100, ROSE);
+  c.text(fLabel_, sub, 22 + ox, 196, ROSE);
   // QR code to the PWA, 3 px per module on a white tile
   const AssetEntry& q = A_->e(A::QR);
   const uint8_t* mod = A_->bytes(A::QR);
   int n = q.w, px = 3, box = n * px + 8;
-  int bx = 12 + ox + (216 - box) / 2, by = 142 + (120 - box) / 2;
+  int bx = 144 + ox + (126 - box) / 2, by = 28 + (190 - box) / 2;
   c.rrect((float)bx, (float)by, (float)box, (float)box, 6, WHITE, 255);
-  for (int yy = 0; yy < n; yy++)
-    for (int xx = 0; xx < n; xx++)
-      if (mod[yy * n + xx]) c.rect(bx + 4 + xx * px, by + 4 + yy * px, px, px, INK);
+  if (by + box > c.cy0 && by < c.cy1)                          // only the band being drawn
+    for (int yy = 0; yy < n; yy++) {
+      if (by + 4 + (yy + 1) * px <= c.cy0 || by + 4 + yy * px >= c.cy1) continue;
+      for (int xx = 0; xx < n;) {                              // merge horizontal runs: ~4x fewer rect calls
+        if (!mod[yy * n + xx]) { xx++; continue; }
+        int x1 = xx;
+        while (x1 < n && mod[yy * n + x1]) x1++;
+        c.rect(bx + 4 + xx * px, by + 4 + yy * px, (x1 - xx) * px, px, INK);
+        xx = x1;
+      }
+    }
 }
 
 // ------------------------------------------------------------------ chrome
@@ -433,9 +453,13 @@ void Ui::drawStatus(Canvas& c) {
     snprintf(buf, sizeof buf, "%02d:%02d", mins / 60, mins % 60);
   } else snprintf(buf, sizeof buf, "--:--");
   int tw = Canvas::textWidth(fSmall_, buf);
-  c.text(fSmall_, buf, 232 - tw, 15, WHITE);
+  c.text(fSmall_, buf, W - 8 - tw, 15, WHITE);
   // battery
-  int bx = 232 - tw - 30;
+  char pc[8];
+  snprintf(pc, sizeof pc, "%d%%", m.battery);
+  int pw = Canvas::textWidth(fLabel_, pc);
+  int bx = W - 8 - tw - 30 - pw - 4;
+  c.text(fLabel_, pc, bx + 26, 14, m.usbPower ? GREEN : (m.battery < 20 ? RED : WHITE), 230);
   c.rrectStroke((float)bx, 5, 20, 10, 2.5f, WHITE, 200, 200);
   c.rect(bx + 20, 8, 2, 4, WHITE, 200);
   float lvl = m.battery / 100.f;
@@ -444,8 +468,8 @@ void Ui::drawStatus(Canvas& c) {
   uint16_t lc = link_ == Link::Ble || link_ == Link::Usb ? GREEN : link_ == Link::Advertising ? BLUE : ROSE;
   float la = link_ == Link::Advertising ? .4f + .6f * (sinf(t_ * 4) * .5f + .5f) : 1;
   c.circle((float)bx - 10, 10, 3, lc, A8(la));
-  // body temperature, left of the link dot (portrait: only when the run chip is not showing)
-  if (M_->real && M_->tempOk && !m.running) {
+  // body temperature, left of the link dot (not on LIVE, which has its own card)
+  if (M_->real && M_->tempOk && ip != 0) {
     snprintf(buf, sizeof buf, "%.1f C", m.temp);
     c.text(fSmall_, buf, bx - 18 - Canvas::textWidth(fSmall_, buf), 15, CREAM);
   }
@@ -460,11 +484,11 @@ void Ui::drawStatus(Canvas& c) {
     c.text(fLabel_, buf, cx + 14, 14, WHITE, 255, 1);
   }
   // page dots
-  int x = 120 - (PAGES * 10 + 10) / 2;
+  int x = W / 2 - (PAGES * 10 + 10) / 2;
   for (int i = 0; i < PAGES; i++) {
     float d = clamp01(1 - fabsf(pageF_ - i));
     float w = 5 + 11 * d;
-    c.rrect((float)x, 269, w, 5, 2.5f, d > .5f ? WHITE : ROSE, A8(.45f + .55f * d));
+    c.rrect((float)x, H - 11, w, 5, 2.5f, d > .5f ? WHITE : ROSE, A8(.45f + .55f * d));
     x += (int)w + 5;
   }
 }

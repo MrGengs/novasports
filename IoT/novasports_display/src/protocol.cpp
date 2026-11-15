@@ -54,7 +54,7 @@ int handle(const char* json, size_t len, const Env& env, char* reply, size_t n) 
     char t[48];
     snprintf(t, sizeof t, "Hi %s - synced", p.name);
     ui.toast(t, gfx::hex(0x3BE07A));
-    return snprintf(reply, n, "{\"t\":\"info\",\"name\":\"%s\",\"fw\":\"1.0.0\",\"w\":240,\"h\":280,\"board\":\"esp32c6-lcd169\"}", env.deviceName);
+    return snprintf(reply, n, "{\"t\":\"info\",\"name\":\"%s\",\"fw\":\"1.0.0\",\"w\":280,\"h\":240,\"board\":\"esp32c6-lcd169\"}", env.deviceName);
   }
   if (!strcmp(cmd, "ping")) return snprintf(reply, n, "{\"t\":\"pong\"}");
   if (!strcmp(cmd, "time")) setTime(m, doc.as<JsonVariantConst>(), up);
