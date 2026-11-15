@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
   ui.begin(&as, &m); ui.setDeviceName("NovaSports-EB60");
   std::vector<uint16_t> fb(gfx::W * gfx::H); gfx::Canvas c; c.band(fb.data(), 0, gfx::H);
   m.m.hr = 142; m.m.spo2 = 97; m.m.cadence = 166; m.m.battery = 76; m.m.temp = 33.9f; m.m.steps = 4213;
-  m.hrOk = m.spo2Ok = m.cadOk = m.tempOk = true; m.m.zone = 3; m.m.readiness = 78;
+  m.hrOk = m.spo2Ok = m.cadOk = m.tempOk = m.imuOk = true; m.m.stab = 82; m.m.tremor = 1.6f; m.m.zone = 3; m.m.readiness = 78;
   m.epochOffset = 1790000000 + 3600 * 5; m.timeValid = true;
   float t = 0; char path[256];
   auto step = [&](float secs) { for (float x = 0; x < secs; x += 1 / 30.f) { for (int i = 0; i < 160; i++) m.pushPpg(sinf((t + x) * 6.2831f * 1.4f) * .6f + sinf((t + x) * 12.5f) * .2f); m.update(1 / 30.f, t + x); ui.update(1 / 30.f); } t += secs; };

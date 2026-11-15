@@ -45,6 +45,16 @@ struct Data {
   volatile uint32_t simUntil = 0;                  // uji: sinyal jalan sintetis sampai millis() ini (perintah serial "simwalk N")
   volatile uint32_t steps = 0;                     // validated steps since boot (the model diffs this)
   volatile bool hasMax = false, hasMlx = false, hasGyro = false, hasMpu = false;
+  // Raw streams for the archery bridge (BLE tags 0x01/0x02/0x03), single producer (sensor task) / single consumer (loop).
+  static constexpr int PPG_N = 256, IMU_N = 128;
+  uint32_t rawRed[PPG_N] = {0}, rawIr[PPG_N] = {0};
+  volatile uint32_t rawPpgW = 0;                   // PPG samples written (100 Hz, 18-bit)
+  int16_t rawImu[IMU_N][6] = {};                   // ax ay az gx gy gz in MPU6050 units (+-4 g = 8192 LSB/g, +-500 dps = 65.5 LSB/dps)
+  volatile uint32_t rawImuW = 0;                   // IMU samples written (50 Hz)
+  volatile float objC = NAN, ambC = NAN;           // MLX90614 raw object / ambient, deg C
+  volatile float tremor = 0, stab = 0;             // gyro RMS above 2 Hz (deg/s) and hand steadiness 0..100 (local display only)
+  volatile uint32_t imuAt = 0;                     // millis() of the last IMU sample
+  volatile uint32_t rawTempW = 0;                  // temperature readings written (2 Hz)
 };
 inline Data data;
 
@@ -109,9 +119,9 @@ struct Ppg {
 Ppg ppgState;
 
 // ---- MLX90614
-bool mlxRead(float& c) {
+bool mlxRead(float& c, uint8_t reg = 0x07) {      // 0x07 = Tobj1, 0x06 = Ta
   Wire.beginTransmission(ADDR_MLX);
-  Wire.write(0x07);                               // RAM: Tobj1
+  Wire.write(reg);
   if (Wire.endTransmission(false) != 0) return false;
   if (Wire.requestFrom((int)ADDR_MLX, 3) != 3) return false;
   uint8_t lo = Wire.read(), hi = Wire.read();
@@ -138,19 +148,44 @@ bool mpuInit() {
     if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)a, 1) != 1) continue;
     if (Wire.read() != 0x05) continue;                                  // QMI8658
     return mpuWrite(0x02, 0x60)                                         // CTRL1: auto-increment, big-endian off
-        && mpuWrite(0x03, 0x26)                                         // CTRL2: accel +-8 g (4096 LSB/g), ODR 112 Hz
-        && mpuWrite(0x08, 0x01);                                        // CTRL7: accelerometer on
+        && mpuWrite(0x03, 0x16)                                         // CTRL2: accel +-4 g (8192 LSB/g), ODR 125 Hz   (archery contract)
+        && mpuWrite(0x04, 0x56)                                         // CTRL3: gyro +-512 dps (64 LSB/dps), ODR 125 Hz
+        && mpuWrite(0x08, 0x03);                                        // CTRL7: accelerometer + gyro on
   }
   mpuAddr = 0;
   return false;
 }
 bool mpuRead(float& g) {
-  Wire.beginTransmission(mpuAddr); Wire.write(0x35);                    // AX_L
-  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)mpuAddr, 6) != 6) return false;
-  int16_t v[3];
+  static uint32_t n = 0;
+  Wire.beginTransmission(mpuAddr); Wire.write(0x35);                    // AX_L .. GZ_H, 12 bytes
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)mpuAddr, 12) != 12) return false;
+  int16_t v[6];
   for (auto& x : v) { uint8_t l = Wire.read(), h = Wire.read(); x = (int16_t)((h << 8) | l); }   // little-endian
-  float ax = v[0] / 4096.f, ay = v[1] / 4096.f, az = v[2] / 4096.f;
+  float ax = v[0] / 8192.f, ay = v[1] / 8192.f, az = v[2] / 8192.f;
   g = sqrtf(ax * ax + ay * ay + az * az);
+  if ((n++ & 1) == 0) {                                                 // 100 Hz poll -> 50 Hz raw stream
+    uint32_t w = data.rawImuW;
+    int16_t* o = data.rawImu[w % Data::IMU_N];
+    for (int k = 0; k < 3; k++) o[k] = v[k];                            // accel already +-4 g
+    for (int k = 3; k < 6; k++) o[k] = (int16_t)constrain((int32_t)v[k] * 655 / 640, -32768, 32767);   // 64 -> 65.5 LSB/dps (MPU6050 +-500 dps)
+    data.rawImuW = w + 1;
+    // Local aim-steadiness indicator (the web recomputes its own): high-pass the gyro (~2 Hz @ 50 Hz), RMS over 1 s.
+    static float prevG[3] = {0}, hp[3] = {0}, acc = 0; static int cnt = 0;
+    float sq = 0;
+    for (int k = 0; k < 3; k++) {
+      float gk = o[3 + k] / 65.5f;
+      hp[k] = .8f * (hp[k] + gk - prevG[k]); prevG[k] = gk;
+      sq += hp[k] * hp[k];
+    }
+    acc += sq;
+    if (++cnt >= 50) {
+      float t = sqrtf(acc / cnt);
+      data.tremor = data.tremor * .5f + t * .5f;
+      data.stab = 100.f * expf(-data.tremor / 8.f);
+      data.imuAt = millis();
+      acc = 0; cnt = 0;
+    }
+  }
   return true;
 }
 
@@ -316,7 +351,9 @@ void task(void*) {
     if (data.hasMax) {
       ppg.check();
       while (ppg.available()) {
-        ppgState.sample(ppg.getFIFORed(), ppg.getFIFOIR(), millis());
+        uint32_t rr = ppg.getFIFORed(), ii = ppg.getFIFOIR();
+        { uint32_t w = data.rawPpgW; data.rawRed[w % Data::PPG_N] = rr; data.rawIr[w % Data::PPG_N] = ii; data.rawPpgW = w + 1; }
+        ppgState.sample(rr, ii, millis());
         ppg.nextSample();
       }
     }
@@ -349,7 +386,13 @@ void task(void*) {
     if (data.hasMlx && now - mlxAt >= 500) {
       mlxAt = now;
       float c;
-      if (mlxRead(c)) { data.temp = data.tempAt ? data.temp * .6f + c * .4f : c; data.tempAt = now; }
+      float amb;
+      if (mlxRead(c)) {
+        data.temp = data.tempAt ? data.temp * .6f + c * .4f : c; data.tempAt = now;
+        data.objC = c;
+        data.ambC = mlxRead(amb, 0x06) ? amb : NAN;
+        data.rawTempW = data.rawTempW + 1;
+      }
     }
     i2c::give();
     vTaskDelayUntil(&wake, pdMS_TO_TICKS(10));

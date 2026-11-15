@@ -58,6 +58,9 @@ class Ui {
   float downX_ = 0, downY_ = 0, downPage_ = 0, downT_ = 0, lastX_ = 0, lastT_ = 0, velX_ = 0;
   // smoothed values shown on screen
   float hrShown_ = 0, readyShown_ = 0, loadShown_ = 0;
+  float calm_ = -1, steady_ = -1, oxy_ = -1;   // archery readiness factors 0..1 (-1 = not measurable now)
+  bool readyKnown_ = false;
+  gfx::Gauge gAim_, gReady_;
   uint32_t lastBeats_ = 0;
   float beatT_ = 10;          // seconds since the last heartbeat
   float introT_ = -1;         // card intro after boot

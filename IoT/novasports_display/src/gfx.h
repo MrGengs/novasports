@@ -52,6 +52,15 @@ struct Font {
 struct Image { int w, h; const uint16_t* px; };                          // opaque RGB565
 struct Sprite { int w, h; const uint16_t* px; const uint8_t* a; };        // RGB565 + A8
 
+// Precomputed 270-degree gauge ring (gap at the bottom): per pixel the ring coverage and the position along the arc.
+// Drawing it is pure integer work; the float ring() cost ~100 ms per frame on the FPU-less ESP32-C6.
+struct Gauge {
+  int r0 = 0, r1 = 0, size = 0;
+  uint8_t* cov = nullptr;      // 0..255 ring coverage
+  uint8_t* pos = nullptr;      // 0..255 position along the arc (0 = start, 255 = end), 255 = outside the arc
+  void build(int inner, int outer);
+};
+
 class Canvas {
  public:
   uint16_t* fb = nullptr;                     // row y lives at fb + y * W
@@ -75,6 +84,7 @@ class Canvas {
   void circle(float cx, float cy, float r, uint16_t c, uint8_t a);
   void glow(float cx, float cy, float r, uint16_t c, uint8_t a);            // soft additive disc
   void ring(float cx, float cy, float r0, float r1, float a0, float a1, uint16_t c, uint8_t a, bool caps);
+  void gauge(const Gauge& g, int cx, int cy, int fill, uint16_t col, uint16_t trackCol);   // fill 0..255 along the arc
   void line(float x0, float y0, float x1, float y1, float w, uint16_t c, uint8_t a);
 
   void image(const Image& im, int sx, int sy, int dx, int dy, int w, int h);  // copy a region

@@ -20,6 +20,7 @@ struct Profile {
 struct Metrics {
   float hr = 64, spo2 = 98, cadence = 0, pace = 0, dist = 0, kcal = 0, load = 0;
   float temp = 0;          // skin temperature, deg C (0 = no sensor)
+  float tremor = 0, stab = 0;   // aim: gyro RMS above 2 Hz (deg/s) and steadiness 0..100
   uint32_t steps = 0;
   float elapsed = 0;       // s, running time
   int readiness = 82, zone = 1, battery = 100;
@@ -33,7 +34,7 @@ class Model {
   Metrics m;
   bool demo = true;                // false while the app feeds real HR
   bool real = false;               // on the device: readings come from sensors only, nothing is simulated
-  bool hrOk = false, spo2Ok = false, cadOk = false, tempOk = false;   // valid sensor reading right now
+  bool hrOk = false, spo2Ok = false, cadOk = false, tempOk = false, imuOk = false;   // valid sensor reading right now
   static constexpr int PPG_N = 200;
   float ppg[PPG_N] = {0};          // ring buffer at PPG_HZ
   static constexpr float PPG_HZ = 50.f;

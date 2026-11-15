@@ -441,6 +441,41 @@ void Canvas::glassCard(int x, int y, int w, int h, uint8_t at, uint8_t ab) {
   }
 }
 
+void Gauge::build(int inner, int outer) {
+  r0 = inner; r1 = outer; size = 2 * (outer + 2);
+  delete[] cov; delete[] pos;
+  cov = new uint8_t[size * size]; pos = new uint8_t[size * size];
+  const float A0 = -2.356194f, SWEEP = 4.712389f;
+  int c = size / 2;
+  for (int y = 0; y < size; y++)
+    for (int x = 0; x < size; x++) {
+      float dx = x + .5f - c, dy = y + .5f - c, d = sqrtf(dx * dx + dy * dy);
+      float cv = clampf(fminf(d - inner + .5f, outer - d + .5f), 0, 1);
+      float a = atan2f(dx, -dy);                      // clockwise from 12 o'clock
+      float t = (a - A0) / SWEEP;
+      if (t < 0 || t > 1) cv = 0;
+      cov[y * size + x] = (uint8_t)(cv * 255);
+      pos[y * size + x] = (uint8_t)(clampf(t, 0, 1) * 255);
+    }
+}
+
+void Canvas::gauge(const Gauge& g, int cx, int cy, int fill, uint16_t col, uint16_t trackCol) {
+  int c = g.size / 2;
+  int y0 = imax(cy - c, cy0), y1 = imin(cy - c + g.size, cy1);
+  int xa = imax(cx - c, cx0), xb = imin(cx - c + g.size, cx1);
+  for (int yy = y0; yy < y1; yy++) {
+    const uint8_t* cv = g.cov + (yy - (cy - c)) * g.size - (cx - c);
+    const uint8_t* ps = g.pos + (yy - (cy - c)) * g.size - (cx - c);
+    uint16_t* p = fb + yy * W;
+    for (int xx = xa; xx < xb; xx++) {
+      uint32_t a = cv[xx];
+      if (!a) continue;
+      if (ps[xx] <= fill) p[xx] = blend(p[xx], col, a);
+      else p[xx] = blend(p[xx], trackCol, a * 26 >> 8);
+    }
+  }
+}
+
 // A waveform drawn column by column: each column fills the vertical span the
 // curve crosses there, with soft ends; no per-pixel square roots. Optional
 // fill under the curve fading out toward floorY.

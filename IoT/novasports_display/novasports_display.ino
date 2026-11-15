@@ -22,6 +22,7 @@
 #include <Arduino_GFX_Library.h>
 #include <BLEDevice.h>      // BLE bawaan core ESP32 (berbasis NimBLE di C6) - NimBLE-Arduino 2.x tidak cocok dengan core C6
 #include <BLEServer.h>
+#include <BLE2902.h>
 #include <BLEUtils.h>
 #include <Wire.h>
 #include <esp_mac.h>
@@ -52,10 +53,18 @@ static const uint32_t LCD_SPI_HZ = 80000000;
 static const uint8_t TOUCH_ADDR = 0x15;
 
 // ---------------------------------------------------------------- BLE UUIDs
-#define NB_SVC   "4e420001-6e6f-7661-6261-6e6453330000"
-#define NB_TELEM "4e420002-6e6f-7661-6261-6e6453330000"
-#define NB_WAVE  "4e420003-6e6f-7661-6261-6e6453330000"
-#define NB_CMD   "4e420004-6e6f-7661-6261-6e6453330000"
+// Archery bridge (same contract as firmware/novasport_wearable, read by public/assets/js/devices/wearable-ble.js):
+// raw sensor packets, little-endian, first byte = TAG. All the maths (HR, HRV, SpO2, tremor ...) is done in the browser.
+#define NB_SVC   "6e400010-b5a3-f393-e0a9-e50e24dcca9e"
+#define NB_DATA  "6e400011-b5a3-f393-e0a9-e50e24dcca9e"
+#define TAG_PPG  0x01
+#define TAG_IMU  0x02
+#define TAG_TEMP 0x03
+#define TAG_FW   0x04
+#define PPG_FS       100
+#define PPG_PER_PKT  5      // 4 + 5*6  = 34 bytes
+#define IMU_FS       50
+#define IMU_PER_PKT  3      // 4 + 3*12 = 40 bytes
 
 // ---------------------------------------------------------------- state
 static Arduino_DataBus* lcdBus = new Arduino_HWSPI(PIN_LCD_DC, PIN_LCD_CS, PIN_LCD_SCLK, PIN_LCD_MOSI, GFX_NOT_DEFINED);
@@ -79,7 +88,7 @@ static int brightness = 100;                    // ~40 %: saves battery (the app
 
 struct Line { char s[256]; uint8_t src; };      // commands from BLE/USB, handled in loop()
 static QueueHandle_t cmdQ;
-static BLECharacteristic *chTelem, *chWave, *chHr, *chBat;
+static BLECharacteristic *chTx, *chHr, *chBat;
 static volatile int bleClients = 0;
 static bool bleUp = false;                                  // bleInit() sudah jalan
 static volatile uint32_t advAt = 0;                        // millis() at which to restart advertising, 0 = none
@@ -181,7 +190,7 @@ static void pwrKeyBegin() {
   bool dn = digitalRead(PIN_BTN_PREV);
   pinMode(PIN_BTN_PREV, INPUT);
   pwrUsable = (up == dn);
-  pwrIdle = up;
+  pwrIdle = true;      // PWR is active-low (idle HIGH). NOT measured: the key is usually still held when the watch is switched on
   Serial.printf("# PWR_KEY GPIO%d: %s, idle %s\n", PIN_BTN_PREV, pwrUsable ? "driven externally" : "FLOATING - key disabled", pwrIdle ? "HIGH" : "LOW");
 }
 static bool isPressed(int pin) {
@@ -264,6 +273,9 @@ static void applySensors() {
   model.spo2Ok = fresh(data.spo2At);
   model.cadOk = fresh(data.cadAt);
   model.tempOk = fresh(data.tempAt);
+  model.imuOk = fresh(data.imuAt);
+  model.m.tremor = model.imuOk ? data.tremor : 0;
+  model.m.stab = model.imuOk ? data.stab : 0;
   model.m.hr = model.hrOk ? data.hr : 0;
   model.m.spo2 = model.spo2Ok ? data.spo2 : 0;
   model.m.cadence = model.cadOk ? data.cadence : 0;
@@ -292,19 +304,9 @@ class SrvCb : public BLEServerCallbacks {
     advAt = millis() + 400;                                 // re-advertise from loop(), after the stack settled
   }
 };
-class CmdCb : public BLECharacteristicCallbacks {
-  void onWrite(BLECharacteristic* c) override {
-    Line l = {};
-    String v = c->getValue();
-    strncpy(l.s, v.c_str(), sizeof l.s - 1);
-    l.src = 0;
-    xQueueSend(cmdQ, &l, 0);
-  }
-};
-
 static void bleInit() {
   BLEDevice::init(devName);
-  BLEDevice::setMTU(247);
+  BLEDevice::setMTU(185);                                   // 34-40 byte packets need an MTU above 23
   BLEServer* srv = BLEDevice::createServer();
   srv->setCallbacks(new SrvCb());
 
@@ -320,14 +322,12 @@ static void bleInit() {
   bas->start();
 
   BLEService* nb = srv->createService(NB_SVC);
-  chTelem = nb->createCharacteristic(NB_TELEM, BLECharacteristic::PROPERTY_NOTIFY | BLECharacteristic::PROPERTY_READ);
-  chWave = nb->createCharacteristic(NB_WAVE, BLECharacteristic::PROPERTY_NOTIFY);
-  BLECharacteristic* cmd = nb->createCharacteristic(NB_CMD, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
-  cmd->setCallbacks(new CmdCb());
+  chTx = nb->createCharacteristic(NB_DATA, BLECharacteristic::PROPERTY_NOTIFY);
+  chTx->addDescriptor(new BLE2902());
   nb->start();
 
   BLEAdvertising* adv = BLEDevice::getAdvertising();
-  adv->addServiceUUID(NB_SVC);
+  adv->addServiceUUID(NB_SVC);                              // archery bridge service (name starts with NOVA-BAND)
   adv->addServiceUUID(BLEUUID((uint16_t)0x180D));
   adv->setScanResponse(true);
   BLEDevice::startAdvertising();
@@ -335,7 +335,51 @@ static void bleInit() {
 
 static void send(const char* s, uint8_t src) {
   if (src == 1) { Serial.println(s); return; }
-  if (bleClients > 0) { chTelem->setValue((uint8_t*)s, strlen(s)); chTelem->notify(); }
+  (void)s;                                                  // BLE carries raw archery packets only (see archeryTick)
+}
+
+static void bleSend(uint8_t* b, size_t n) { if (bleClients > 0 && chTx) { chTx->setValue(b, n); chTx->notify(); } }
+
+// Raw streams -> BLE packets (tags 0x01 PPG, 0x02 IMU, 0x03 temperature, 0x04 summary). Called every loop pass.
+static void archeryTick() {
+  using namespace sensors;
+  static uint32_t rp = 0, ri = 0, rt = 0, tFw = 0;
+  static uint8_t seqP = 0, seqI = 0, seqT = 0, seqF = 0;
+  uint32_t wp = data.rawPpgW, wi = data.rawImuW, wt = data.rawTempW;
+  if (wp - rp > Data::PPG_N) rp = wp - Data::PPG_N;           // fell behind (long frame): drop the oldest
+  if (wi - ri > Data::IMU_N) ri = wi - Data::IMU_N;
+  while (wp - rp >= PPG_PER_PKT) {
+    uint8_t b[4 + PPG_PER_PKT * 6] = {TAG_PPG, seqP++, PPG_PER_PKT, PPG_FS};
+    for (int i = 0; i < PPG_PER_PKT; i++, rp++) {
+      uint32_t red = data.rawRed[rp % Data::PPG_N], ir = data.rawIr[rp % Data::PPG_N];
+      uint8_t* o = b + 4 + i * 6;
+      o[0] = red; o[1] = red >> 8; o[2] = red >> 16; o[3] = ir; o[4] = ir >> 8; o[5] = ir >> 16;
+    }
+    bleSend(b, sizeof b);
+  }
+  while (wi - ri >= IMU_PER_PKT) {
+    uint8_t b[4 + IMU_PER_PKT * 12] = {TAG_IMU, seqI++, IMU_PER_PKT, IMU_FS};
+    for (int i = 0; i < IMU_PER_PKT; i++, ri++) {
+      uint8_t* o = b + 4 + i * 12;
+      for (int k = 0; k < 6; k++) { int16_t v = data.rawImu[ri % Data::IMU_N][k]; o[k * 2] = v & 0xFF; o[k * 2 + 1] = (v >> 8) & 0xFF; }
+    }
+    bleSend(b, sizeof b);
+  }
+  if (wt != rt) {
+    rt = wt;
+    float obj = data.objC, amb = data.ambC;
+    if (!isnan(obj) && !isnan(amb)) {
+      int16_t o = (int16_t)lroundf(obj * 100), a = (int16_t)lroundf(amb * 100);
+      uint8_t b[6] = {TAG_TEMP, seqT++, (uint8_t)(o & 0xFF), (uint8_t)(o >> 8), (uint8_t)(a & 0xFF), (uint8_t)(a >> 8)};
+      bleSend(b, sizeof b);
+    }
+  }
+  if (millis() - tFw >= 1000) {                               // summary, 1 Hz: hr, spo2, battery
+    tFw = millis();
+    uint8_t b[5] = {TAG_FW, seqF++, (uint8_t)(model.hrOk ? constrain((int)(model.m.hr + .5f), 0, 255) : 0),
+                    (uint8_t)(model.spo2Ok ? constrain((int)(model.m.spo2 + .5f), 0, 100) : 0), (uint8_t)model.m.battery};
+    bleSend(b, sizeof b);
+  }
 }
 
 static void linkTick() {
@@ -359,8 +403,6 @@ static void linkTick() {
       cloud::publish(buf);
     }
     if (bleClients > 0) {
-      chTelem->setValue((uint8_t*)buf, strlen(buf));
-      chTelem->notify();
       uint8_t hr[2] = {0x00, (uint8_t)constrain((int)(model.m.hr + .5f), 0, 255)};   // flags: uint8 HR
       chHr->setValue(hr, 2);
       chHr->notify();
@@ -369,19 +411,7 @@ static void linkTick() {
       chBat->notify();
     }
   }
-  // PPG wave: the newest 20 samples as int8, every 400 ms, with a sequence byte
-  if (bleClients > 0 && now - lastWave >= 400) {
-    lastWave = now;
-    uint8_t pkt[21];
-    static uint8_t seq = 0;
-    pkt[0] = seq++;
-    for (int i = 0; i < 20; i++) {
-      float v = model.ppg[(model.ppgHead + Model::PPG_N - 20 + i) % Model::PPG_N];
-      pkt[1 + i] = (uint8_t)(int8_t)constrain((int)(v * 90), -127, 127);
-    }
-    chWave->setValue(pkt, sizeof pkt);
-    chWave->notify();
-  }
+  archeryTick();
 }
 
 static void serialPoll() {
@@ -444,7 +474,7 @@ void setup() {
 
   uint8_t mac[6];
   esp_read_mac(mac, ESP_MAC_BT);
-  snprintf(devName, sizeof devName, "NovaSports-%02X%02X", mac[4], mac[5]);
+  snprintf(devName, sizeof devName, "NOVA-BAND-%02X%02X", mac[4], mac[5]);   // the web app filters on the "NOVA-BAND" prefix
 
   displayInit();
   if (!assetsInit()) {
@@ -495,15 +525,19 @@ void loop() {
   // input
   // PWR: short press = screen off / on (the ESP keeps running), hold 2 s = power off.  BOOT: next page (hold = previous).
   if (!screenOff) { touchPoll(); ui.touch(tdown, tlx, tly); } else { tdown = false; ui.touch(false, 0, 0); }
-  int e = bNext.poll();
+  // The key that powered the watch on is still held when the firmware starts: ignore the keys until they have been released once,
+  // otherwise that release counts as a short press (screen off) or the hold counts as "power off".
+  static bool keysArmed = false;
+  if (!keysArmed) { if (!isPressed(PIN_BTN_PREV) && !isPressed(PIN_BTN_NEXT)) keysArmed = true; }
+  int e = keysArmed ? bNext.poll() : 0;
   if (e) {
     if (screenOff) screenOff = false;                         // any key wakes the screen
     else if (e == 1) ui.buttonNext(false);
     else ui.buttonPrev(false);
   }
-  e = bPrev.poll();
+  e = keysArmed ? bPrev.poll() : 0;
   if (e == 1) screenOff = !screenOff;
-  if (bPrev.down && millis() - bPrev.downAt >= POWER_HOLD_MS) powerOff();
+  if (keysArmed && bPrev.down && millis() - bPrev.downAt >= POWER_HOLD_MS) powerOff();
 
   serialPoll();
   // BLE hanya formalitas (menyambung ke jam dari web): dinyalakan setelah cloud login, atau setelah 30 dtk
