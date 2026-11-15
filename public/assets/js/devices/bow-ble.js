@@ -117,15 +117,16 @@ export class BowLink extends EventTarget {
     this.source = "ble";
     this._stopped = false;
     this._status("scanning", "Memilih busur…");
-    const device = await navigator.bluetooth.requestDevice({
+    let device;
+    try { device = await navigator.bluetooth.requestDevice({
       filters: [...NAME_PREFIXES.map((namePrefix) => ({ namePrefix })), { services: [NUS_SERVICE] }],
       exclusionFilters: [{ namePrefix: "NOVA-BAND" }, { namePrefix: "Muse" }],   // jangan tertukar dengan smartwatch/EEG
       optionalServices: [NUS_SERVICE],
-    });
+    }); } catch (err) { await this.stop(); throw err; }     // dialog dibatalkan -> status kembali idle
     this.device = device;
     this._onGattDisconnect = () => this._handleDisconnect();
     device.addEventListener("gattserverdisconnected", this._onGattDisconnect);
-    await this._openSession();
+    try { await this._openSession(); } catch (err) { await this.stop(); throw err; }
     return device.name || "busur";
   }
 

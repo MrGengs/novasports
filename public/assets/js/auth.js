@@ -82,6 +82,44 @@ export async function signIn(email, password, roleHint) {
   return demoLogin(roleHint || "siswa");
 }
 
+/* Google sign-in: profile may not exist yet -> caller must ask for a role. */
+let pending = null;
+export function getPendingGoogle() { return pending; }
+
+export async function signInWithGoogle() {
+  if (!firebaseReady) throw Object.assign(new Error("demo"), { code: "app/no-firebase" });
+  const f = await loadFb();
+  const cred = await f.signInWithPopup(auth, new f.GoogleAuthProvider());
+  const profile = await fetchProfile(cred.user.uid);
+  if (profile && ROLES[profile.role]) {
+    pending = null;
+    current = profile;
+    emit();
+    return { isNew: false, user: current };
+  }
+  pending = { uid: cred.user.uid, email: cred.user.email, name: cred.user.displayName || cred.user.email, photo: cred.user.photoURL || null };
+  emit();
+  return { isNew: true, pending };
+}
+
+/** Finish Google registration after the user picked a role. */
+export async function completeGoogleProfile(role, school) {
+  if (!pending || !ROLES[role]) throw new Error("no-pending");
+  const f = await loadFb();
+  const profile = { ...pending, role, school: school || null, createdAt: f.serverTimestamp() };
+  await f.setDoc(f.doc(db, "users", pending.uid), profile);
+  current = { ...profile, createdAt: null };
+  pending = null;
+  emit();
+  return current;
+}
+
+export async function cancelGoogleProfile() {
+  pending = null;
+  if (firebaseReady) { const f = await loadFb(); await f.signOut(auth); }
+  emit();
+}
+
 /** Register a new account (Firebase) + create profile doc. */
 export async function signUp({ name, email, password, role, school }) {
   if (firebaseReady) {
@@ -121,7 +159,12 @@ export async function initAuth() {
     return new Promise((resolve) => {
       f.onAuthStateChanged(auth, async (u) => {
         if (u) {
-          current = (await fetchProfile(u.uid)) || { uid: u.uid, email: u.email, role: "siswa", name: u.email };
+          const prof = await fetchProfile(u.uid);
+          if (prof && ROLES[prof.role]) current = prof;
+          else if (u.providerData.some((p) => p.providerId === "google.com")) {
+            current = null;
+            pending = { uid: u.uid, email: u.email, name: u.displayName || u.email, photo: u.photoURL || null };
+          } else current = { uid: u.uid, email: u.email, role: "siswa", name: u.email };
         } else {
           current = restoreDemo(); // demo session may still exist
         }

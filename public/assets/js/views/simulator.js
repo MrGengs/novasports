@@ -58,6 +58,7 @@ export function simulatorView() {
       <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
         <button class="btn btn-outline btn-sm" id="btnBio">⌚ Hubungkan</button><button class="btn btn-outline btn-sm" id="btnBioSim">🧪 Simulasi</button>
       </div>
+      <button class="btn btn-outline btn-sm" id="btnBioStop" style="margin-top:8px;width:100%">⏻ Putuskan Smartwatch</button>
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:8px">
         <input class="input" id="manSpo2" type="number" min="70" max="100" placeholder="SpO₂ manual" style="padding:4px 8px"><input class="input" id="manHr" type="number" min="30" max="220" placeholder="HR manual" style="padding:4px 8px"><button class="btn btn-outline btn-sm" id="btnManual">✓</button>
       </div>
@@ -349,8 +350,8 @@ export function mountSimulator() {
   bio.addEventListener("jolt", () => log("MPU: hentakan terdeteksi (kemungkinan saat melepas panah)"));
   bio.addEventListener("status", (e) => {
     const { state: s, text } = e.detail;
-    $("bioState").className = "pill " + (s === "live" ? "ok" : s === "error" ? "danger" : "info");
-    $("bioState").textContent = "● " + (s === "live" ? "Smartwatch live" : s === "idle" ? "Smartwatch" : "…");
+    $("bioState").className = "pill " + (s === "live" ? "ok" : s === "error" ? "danger" : s === "retry" ? "warn" : "info");
+    $("bioState").textContent = "● " + (s === "live" ? "Smartwatch live" : s === "idle" ? "Smartwatch" : s === "retry" ? "Menyambung ulang" : "…");
     $("bioNote").textContent = text;
     log("Wearable: " + text, s === "error" ? "error" : "info");
   });
@@ -431,6 +432,7 @@ export function mountSimulator() {
   $("btnBio").addEventListener("click", guard(async () => { const n = await bio.connectBle(); toast(`${n} terhubung.`, "ok"); }));
   $("btnEeg").addEventListener("click", guard(async () => { const n = await eeg.connectBle($("museSel").value); toast(`${n} terhubung — tunggu ±2 detik untuk analisis gelombang otak.`, "ok"); }));
   $("btnEegSim").addEventListener("click", guard(() => eeg.startSim()));
+  $("btnBioStop").addEventListener("click", () => bio.stop());
   $("btnBioSim").addEventListener("click", guard(() => bio.startSim()));
   $("btnFull").addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();

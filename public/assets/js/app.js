@@ -2,7 +2,7 @@
    NovaSport — Application shell, router, login.
    Native ES-module SPA with a hash router and role-based nav.
    ============================================================ */
-import { ROLES, onAuthChange, getCurrentUser, demoLogin, signIn, signUp, signOutUser, initAuth } from "./auth.js";
+import { ROLES, onAuthChange, getCurrentUser, demoLogin, signIn, signUp, signOutUser, initAuth, signInWithGoogle, getPendingGoogle, completeGoogleProfile, cancelGoogleProfile } from "./auth.js";
 import { initials } from "./demo-data.js";
 import { toast } from "./ui.js";
 import { icon, resolveIcon, enhanceIcons } from "./icons.js";
@@ -210,6 +210,11 @@ function renderLogin() {
           <button class="btn btn-primary btn-block" type="submit">${loginMode === "login" ? "Masuk →" : "Buat Akun →"}</button>
         </form>
 
+        <div class="divider">atau</div>
+        <button type="button" class="btn btn-block" id="googleBtn" style="border:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--ink-700,#333);font-weight:700">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.7z"/><path fill="#FBBC05" d="M10.5 28.7a14.5 14.5 0 0 1 0-9.4l-7.9-6.1a24 24 0 0 0 0 21.6l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+          Masuk dengan Google</button>
+
         <div class="divider">atau jelajahi sebagai Demo per peran</div>
         <div class="demo-grid">
           ${roleKeys.map((k) => `<button class="demo-btn" data-demo="${k}"><span class="e">${ROLES[k].icon}</span>${ROLES[k].label}</button>`).join("")}
@@ -232,6 +237,23 @@ function renderLogin() {
     e.preventDefault();
     loginMode = loginMode === "login" ? "register" : "login";
     renderLogin();
+  });
+
+  // Google
+  document.getElementById("googleBtn").addEventListener("click", async () => {
+    const err = document.getElementById("errMsg");
+    err.classList.remove("show");
+    try {
+      const r = await signInWithGoogle();
+      if (r.isNew) renderRolePick(); else goHome();
+    } catch (ex) {
+      const c = (ex && ex.code) || "";
+      err.textContent = c.includes("popup-closed") || c.includes("cancelled") ? "Login Google dibatalkan."
+        : c.includes("no-firebase") ? "Login Google belum tersedia pada mode demo."
+        : c.includes("unauthorized-domain") ? "Domain ini belum diizinkan di Firebase Auth."
+        : "Login Google gagal. Coba lagi.";
+      err.classList.add("show");
+    }
   });
 
   // Demo buttons
@@ -262,6 +284,47 @@ function renderLogin() {
     }
   });
 }
+
+/* ---------- Role picker after Google sign-in ---------- */
+function renderRolePick() {
+  const p = getPendingGoogle();
+  if (!p) { renderLogin(); return; }
+  if (cleanup) { cleanup(); cleanup = null; }
+  document.body.classList.remove("app");
+  const roleKeys = Object.keys(ROLES);
+  let chosen = loginRole;
+  app.innerHTML = `
+  <div class="auth-wrap"><main class="auth-main" style="margin:auto"><div class="auth-card">
+    <h1>Halo, ${esc(p.name)} 👋</h1>
+    <p class="sub">${esc(p.email)}<br>Akun Google berhasil terhubung. Kamu ingin menggunakan NovaSport sebagai apa?</p>
+    <div class="err-msg" id="errMsg"></div>
+    <div class="role-grid">
+      ${roleKeys.map((k) => `<button type="button" class="role-pick ${k === chosen ? "active" : ""}" data-role="${k}"><span class="e">${ROLES[k].icon}</span><span>${ROLES[k].label}</span></button>`).join("")}
+    </div>
+    <div class="field"><label>Sekolah / Institusi <span class="muted" style="font-weight:500">(opsional)</span></label><input class="input" id="fSchool" placeholder="Nama sekolah"></div>
+    <button class="btn btn-primary btn-block" id="roleOk">Lanjutkan →</button>
+    <p style="text-align:center;margin-top:14px"><a href="#" id="roleCancel" style="color:var(--ink-500);font-size:var(--fs-sm)">Batal & ganti akun</a></p>
+  </div></main></div>`;
+  enhanceIcons(app);
+  app.querySelectorAll("[data-role]").forEach((b) => b.addEventListener("click", () => {
+    chosen = b.dataset.role;
+    app.querySelectorAll(".role-pick").forEach((x) => x.classList.toggle("active", x === b));
+  }));
+  document.getElementById("roleOk").addEventListener("click", async () => {
+    try {
+      loginRole = chosen;
+      await completeGoogleProfile(chosen, document.getElementById("fSchool").value.trim());
+      goHome();
+    } catch {
+      const err = document.getElementById("errMsg");
+      err.textContent = "Gagal menyimpan peran. Coba lagi."; err.classList.add("show");
+    }
+  });
+  document.getElementById("roleCancel").addEventListener("click", async (e) => {
+    e.preventDefault(); await cancelGoogleProfile(); renderLogin();
+  });
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 function friendlyError(ex) {
   const c = (ex && ex.code) || "";
@@ -362,7 +425,7 @@ function route() {
 
   if (!user) {
     shellRendered = false;
-    renderLogin();
+    if (getPendingGoogle()) renderRolePick(); else renderLogin();
     return;
   }
   if (path === "/login" || path === "" || path === "/") {
@@ -384,7 +447,7 @@ function route() {
   await initAuth();
   onAuthChange(() => {
     // If logged out, drop to login.
-    if (!getCurrentUser()) { shellRendered = false; renderLogin(); }
+    if (!getCurrentUser() && !document.getElementById("roleOk")) { shellRendered = false; getPendingGoogle() ? renderRolePick() : renderLogin(); }
   });
   window.addEventListener("hashchange", route);
   route();

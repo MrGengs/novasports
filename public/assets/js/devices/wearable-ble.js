@@ -73,14 +73,20 @@ export class WearLink extends EventTarget {
     await this.stop(); this._resetState();
     this.source = "ble"; this._stopped = false;
     this._status("scanning", "Memilih wearable…");
-    const device = await navigator.bluetooth.requestDevice({
+    let device;
+    try { device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "NOVA-BAND" }, { services: [NS_BIO_SERVICE] }, { services: [PLX_SERVICE] }, { services: [HR_SERVICE] }],
       exclusionFilters: [{ namePrefix: "MOTUS" }, { namePrefix: "Muse" }],   // busur & EEG punya tombol sendiri
       optionalServices: [NS_BIO_SERVICE, PLX_SERVICE, HR_SERVICE, BAT_SERVICE, CTS_SERVICE],
-    });
+    }); } catch (err) { await this.stop(); throw err; }     // dialog dibatalkan -> status kembali idle
     this.device = device;
-    this._onDisc = () => { if (!this._stopped) this._status("error", "Wearable terputus. Tekan Hubungkan lagi."); };
+    this._onDisc = () => this._handleDisc();
     device.addEventListener("gattserverdisconnected", this._onDisc);
+    try { return await this._openSession(); } catch (err) { await this.stop(); throw err; }
+  }
+
+  async _openSession() {
+    const device = this.device;
     this._status("connecting", `Menyambung ke ${device.name || "wearable"}…`);
     const server = await device.gatt.connect();
     this._subs = []; const got = [];
@@ -93,12 +99,23 @@ export class WearLink extends EventTarget {
     if (await sub(PLX_SERVICE, PLX_SPOT, (dv) => this._plx(dv))) got.push("SpO₂ spot 0x2A5E");
     if (await sub(HR_SERVICE, HR_MEAS, (dv) => this._hrStd(dv))) got.push("Heart Rate 0x2A37");
     try { const b = await (await server.getPrimaryService(BAT_SERVICE)).getCharacteristic(BAT_LEVEL); this.v.battery = (await b.readValue()).getUint8(0); } catch { /* opsional */ }
-    if (!got.length) throw new Error("Perangkat tidak menyediakan layanan NovaSport wearable, SpO₂ (0x1822), maupun Heart Rate (0x180D).");
+    if (!got.length) { try { device.gatt.disconnect(); } catch { /* abaikan */ } throw new Error("Perangkat tidak menyediakan layanan NovaSport wearable, SpO₂ (0x1822), maupun Heart Rate (0x180D)."); }
     await this._syncTime(server);
     this._startTick();
     this._status("live", `Terhubung · ${device.name || "wearable"}`);
     this._log("Layanan aktif: " + got.join(", "));
     return device.name || "wearable";
+  }
+
+  _handleDisc() {
+    if (this._stopped || this.source !== "ble") return;
+    this._status("retry", "Smartwatch terputus — menyambung ulang tiap 2 detik…");
+    clearTimeout(this._retryT);
+    this._retryT = setTimeout(async () => {
+      if (this._stopped) return;
+      try { await this._openSession(); this._log("tersambung ulang"); }
+      catch { this._handleDisc(); }
+    }, 2000);
   }
 
   // Jam perangkat mengikuti jam HP/PC yang menyambung: JSON ke karakteristik perintah, atau Current Time standar.
@@ -314,7 +331,7 @@ export class WearLink extends EventTarget {
   }
 
   async stop() {
-    this._stopped = true; clearInterval(this._simT); clearInterval(this._tick);
+    this._stopped = true; clearInterval(this._simT); clearInterval(this._tick); clearTimeout(this._retryT);
     try {
       for (const [ch, fn] of this._subs || []) { ch.removeEventListener("characteristicvaluechanged", fn); await ch.stopNotifications().catch(() => {}); }
       if (this.device) { this.device.removeEventListener("gattserverdisconnected", this._onDisc); if (this.device.gatt.connected) this.device.gatt.disconnect(); }

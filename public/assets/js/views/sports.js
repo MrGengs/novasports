@@ -70,7 +70,7 @@ export function runningView() {
   ${pageHead("Simulator / Lari", "🏃 Simulator Lari — Wearable IMU", "Analisis gait real-time dari IMU Wearable Band di pergelangan & pinggang.",
     `<button class="btn btn-outline btn-sm">⭳ Unduh GPX</button><button class="btn btn-primary btn-sm" id="runSave">⊞ Simpan Sesi</button>`)}
 
-  <div class="grid" style="grid-template-columns:300px 1fr 300px;gap:18px">
+  <div class="grid g-3col">
     <!-- config -->
     <div class="card">
       <div class="card-head"><h3>Konfigurasi Lari</h3><span class="pill info" id="runMode">● IMU Band</span></div>
@@ -283,7 +283,7 @@ export function smartSuitView() {
   ${pageHead("Simulator / Smart Suit", "🦾 Smart Suit — Biomekanika Full-Body", "Motion capture full-body dari 16 titik sensor Smart Suit untuk analisis form latihan.",
     `<button class="btn btn-primary btn-sm" id="suitSave">⊞ Simpan Sesi</button>`)}
 
-  <div class="grid" style="grid-template-columns:300px 1fr 300px;gap:18px">
+  <div class="grid g-3col">
     <div class="card">
       <div class="card-head"><h3>Pilih Latihan</h3></div>
       <div style="display:grid;gap:8px" id="exList">
@@ -415,7 +415,7 @@ export function pistolView() {
   ${backBar()}
   ${pageHead("Simulator / Menembak Presisi", "🎯 Smart Precision Pistol — 10m", "Air pistol presisi dengan analisis hold stability & trigger control.",
     `<button class="btn btn-primary btn-sm" id="pSave">⊞ Simpan Sesi</button>`)}
-  <div class="grid" style="grid-template-columns:1fr 320px;gap:18px">
+  <div class="grid g-2col">
     <div class="card">
       <div class="card-head"><div><h3>Papan Skor Langsung</h3><span class="sub">Tembakan <b id="pShot">0</b>/<span id="pMax">20</span></span></div><span class="pill warn" id="pState">⏸ Siap</span></div>
       <div style="background:radial-gradient(circle at 50% 40%,#1a2752,#0c1430);border-radius:var(--r-lg);padding:18px;display:grid;place-items:center" id="pTarget">${archeryTarget([],240)}</div>
