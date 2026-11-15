@@ -273,3 +273,72 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 @media (max-width: 560px) {
   .wr-axes { grid-template-columns: 1fr; gap: 12px; }
 }
+
+/* ============================================================
+   Responsif — tablet, ponsel & desktop lebar
+   ============================================================ */
+html, body { max-width: 100%; overflow-x: hidden; }
+img, svg, canvas, video { max-width: 100%; }
+.grid > *, .card, .main, .content { min-width: 0; }
+
+/* Layout simulator 3 kolom / 2 kolom (menggantikan inline style) */
+.g-3col { grid-template-columns: minmax(250px,300px) minmax(0,1fr) minmax(250px,300px); gap: 18px; }
+.g-2col { grid-template-columns: minmax(0,1fr) minmax(260px,320px); gap: 18px; }
+@media (max-width: 1240px) {
+  .g-3col { grid-template-columns: 1fr 1fr; }
+  .g-3col > :nth-child(2) { grid-column: 1 / -1; order: -1; }
+}
+@media (max-width: 920px) { .g-2col { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .g-3col { grid-template-columns: 1fr; } }
+
+/* Layar sangat lebar: konten lebih lega */
+@media (min-width: 1600px) { .content { max-width: 1480px; } }
+
+/* Tablet & ponsel */
+@media (max-width: 920px) {
+  .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+  .icon-btn, .topbar .menu-btn { width: 44px; height: 44px; }
+  .sidebar { width: min(300px, 86vw); padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .nav-item { padding: 13px 12px; }
+  .tabs { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { white-space: nowrap; }
+}
+
+@media (max-width: 720px) {
+  /* 16px mencegah iOS zoom otomatis saat fokus input */
+  .input, .searchbar input, select.input, input, select, textarea { font-size: 16px; }
+  .btn { min-height: 44px; }
+  .btn-sm { min-height: 40px; }
+  .page-head { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .page-head h1 { font-size: 1.35rem; }
+  .page-actions { width: 100%; }
+  .page-actions .btn { flex: 1; }
+  .card { padding: 16px; }
+  .grid { gap: 14px; }
+  .welcome .w-actions { width: 100%; }
+  .welcome .w-actions .btn { flex: 1; }
+  .stat-val { font-size: 1.7rem; }
+  .field-row { flex-direction: column; gap: 0; }
+  .auth-main { padding: 24px 16px; }
+  .auth-card { padding: 24px 18px; }
+  .toast-wrap { left: 12px; right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); }
+  .toast { max-width: none; }
+  .table-wrap { margin: 0 -2px; -webkit-overflow-scrolling: touch; }
+  .list-row { gap: 10px; padding: 12px 4px; }
+  .list-row .lr-side { font-size: var(--fs-xs); }
+
+  /* Baris kontrol perangkat inline (simulator) bertumpuk di ponsel */
+  #devBar > .card div[style*="grid-template-columns"]:not(.tabs):not([id$="Grid"]) { grid-template-columns: 1fr 1fr !important; }
+  #devBar select.input { width: 100% !important; }
+}
+@media (max-width: 380px) {
+  .role-grid, .demo-grid { grid-template-columns: 1fr 1fr; }
+  .content { padding: 14px 12px; }
+}
+
+/* Perangkat sentuh: target tap lebih besar */
+@media (hover: none) and (pointer: coarse) {
+  .nav-item, .list-row, .tabs button, .role-pick, .demo-btn { min-height: 44px; }
+  .card.hover:hover, .demo-btn:hover { transform: none; }
+}

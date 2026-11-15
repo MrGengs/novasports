@@ -227,3 +227,26 @@
   .cta { padding: 40px 24px; }
   .hero { padding: 120px 0 70px; }
 }
+
+/* ---------- Responsif tambahan ---------- */
+html, body { overflow-x: hidden; }
+@media (max-width: 980px) {
+  .nav-links a { padding: 9px 10px; }
+}
+@media (max-width: 680px) {
+  .nav { padding-top: max(12px, env(safe-area-inset-top)); }
+  .nav-toggle { width: 44px; height: 44px; }
+  .nav.open { background: rgba(12,20,48,.92); backdrop-filter: blur(14px); }
+  .nav.open .nav-links a { padding: 13px 14px; font-size: var(--fs-base); }
+  .hero h1 { font-size: clamp(2rem, 9vw, 2.6rem); }
+  .hero-actions .btn, .cta-actions .btn { flex: 1 1 100%; min-height: 48px; }
+  .hero-trust { gap: 18px; }
+  .statband { padding: 28px 22px; }
+  .container { padding: 0 16px; }
+  .footer { padding: 44px 0 24px; }
+  .footer-bottom { flex-direction: column; align-items: flex-start; }
+}
+@media (max-width: 420px) {
+  .nav-cta .btn-primary { padding: 8px 12px; font-size: .78rem; }
+  .logo-text span { display: none; }
+}
